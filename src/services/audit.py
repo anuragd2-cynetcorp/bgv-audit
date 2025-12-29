@@ -2,6 +2,7 @@
 Service for auditing invoices and detecting discrepancies.
 """
 from typing import Dict, List
+from ..helpers import generate_safe_id
 from src.models import Invoice
 from src.services.invoice import InvoiceService, LineItemFingerprintService
 from src.providers.base import BaseProvider
@@ -203,7 +204,7 @@ class AuditService:
         
         for idx, item in enumerate(extracted.line_items):
             # Use the same fingerprint format as in invoice_service
-            fingerprint_id = item.fingerprint().replace('|', '__')
+            fingerprint_id = generate_safe_id(item.fingerprint())
             existing = self.fingerprint_service.get_by_id(fingerprint_id)
             
             duplicate = None
