@@ -51,32 +51,43 @@ def dashboard():
 def upload_invoice():
     """
     Handle invoice PDF upload and processing.
+    Returns JSON response for AJAX requests.
     """
     if 'file' not in request.files:
-        flash('No file provided', 'error')
-        return redirect(url_for('main.dashboard'))
+        return jsonify({
+            'success': False,
+            'message': 'No file provided'
+        }), 400
     
     file = request.files['file']
     provider_name = request.form.get('provider_name', '').strip()
     
     if file.filename == '':
-        flash('No file selected', 'error')
-        return redirect(url_for('main.dashboard'))
+        return jsonify({
+            'success': False,
+            'message': 'No file selected'
+        }), 400
     
     if not provider_name:
-        flash('Please select a provider', 'error')
-        return redirect(url_for('main.dashboard'))
+        return jsonify({
+            'success': False,
+            'message': 'Please select a provider'
+        }), 400
     
     # Validate provider name
     try:
         Provider.from_string(provider_name)
     except ValueError:
-        flash(f'Invalid provider selected: {provider_name}', 'error')
-        return redirect(url_for('main.dashboard'))
+        return jsonify({
+            'success': False,
+            'message': f'Invalid provider selected: {provider_name}'
+        }), 400
     
     if not allowed_file(file.filename):
-        flash('Invalid file type. Only PDF files are allowed.', 'error')
-        return redirect(url_for('main.dashboard'))
+        return jsonify({
+            'success': False,
+            'message': 'Invalid file type. Only PDF files are allowed.'
+        }), 400
     
     try:
         # Save uploaded file temporarily
@@ -84,12 +95,13 @@ def upload_invoice():
         temp_path = os.path.join(UPLOAD_FOLDER, filename)
         file.save(temp_path)
         
-        # Get provider instance - you need to implement get_provider_instance()
-        # This should return a BaseProvider instance based on provider_name
+        # Get provider instance
         provider = get_provider_instance(provider_name)
         if not provider:
-            flash(f'Provider class not found for: {provider_name}', 'error')
-            return redirect(url_for('main.dashboard'))
+            return jsonify({
+                'success': False,
+                'message': f'Provider class not found for: {provider_name}'
+            }), 400
         
         # Process invoice
         invoice_service = InvoiceService()
@@ -112,15 +124,24 @@ def upload_invoice():
         except:
             pass
         
-        flash(f'Invoice {invoice.invoice_number} processed successfully. Status: {audit_report.overall_status}', 'success')
-        return redirect(url_for('main.view_invoice', invoice_number=invoice.invoice_number))
+        return jsonify({
+            'success': True,
+            'message': f'Invoice {invoice.invoice_number} processed successfully. Status: {audit_report.overall_status}',
+            'invoice_number': invoice.invoice_number,
+            'audit_status': audit_report.overall_status,
+            'redirect_url': url_for('main.view_invoice', invoice_number=invoice.invoice_number)
+        }), 200
     
     except ValueError as e:
-        flash(f'Processing error: {str(e)}', 'error')
-        return redirect(url_for('main.dashboard'))
+        return jsonify({
+            'success': False,
+            'message': f'Processing error: {str(e)}'
+        }), 400
     except Exception as e:
-        flash(f'Unexpected error: {str(e)}', 'error')
-        return redirect(url_for('main.dashboard'))
+        return jsonify({
+            'success': False,
+            'message': f'Unexpected error: {str(e)}'
+        }), 500
 
 @main_bp.route('/invoice/<invoice_number>')
 @login_required
