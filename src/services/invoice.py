@@ -31,7 +31,6 @@ class InvoiceService(BaseService[Invoice]):
         Raises:
             ValueError: If processing fails
         """
-        
         # Extract invoice data using the provided provider
         extracted = provider.extract(pdf_path)
         
