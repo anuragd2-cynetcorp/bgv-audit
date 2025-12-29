@@ -54,12 +54,16 @@ class InvoiceService(BaseService[Invoice]):
     def _store_fingerprints(self, invoice_id: str, extracted: ExtractedInvoice):
         """
         Store fingerprints of line items for historical duplicate detection.
+        Uses bulk create/update for efficiency.
         
         Args:
             invoice_id: Invoice document ID
             extracted: ExtractedInvoice object
         """
         fingerprint_service = LineItemFingerprintService()
+        
+        # Prepare bulk items list
+        fingerprint_items = []
         
         for line_item in extracted.line_items:
             # Validate required fields
@@ -97,31 +101,20 @@ class InvoiceService(BaseService[Invoice]):
                 print(f"Warning: Fingerprint too long ({len(fingerprint_id)} chars), truncating")
                 fingerprint_id = fingerprint_id[:1500]
             
-            # Check if this fingerprint already exists (historical duplicate)
-            existing = fingerprint_service.get_by_id(fingerprint_id)
-            
-            if existing:
-                # Update to mark as duplicate (we'll handle this in audit)
-                fingerprint_service.create_or_update(
-                    doc_id=fingerprint_id,
-                    candidate_id=line_item.candidate_id,
-                    service_description=line_item.service_description,
-                    invoice_id=invoice_id,
-                    invoice_number=extracted.invoice_number,
-                    provider_name=extracted.provider_name,
-                    cost=line_item.cost
-                )
-            else:
-                # Create new fingerprint
-                fingerprint_service.create(
-                    doc_id=fingerprint_id,
-                    candidate_id=line_item.candidate_id,
-                    service_description=line_item.service_description,
-                    invoice_id=invoice_id,
-                    invoice_number=extracted.invoice_number,
-                    provider_name=extracted.provider_name,
-                    cost=line_item.cost
-                )
+            # Prepare item for bulk operation
+            fingerprint_items.append({
+                'doc_id': fingerprint_id,
+                'candidate_id': candidate_id,
+                'service_description': service_description,
+                'invoice_id': invoice_id,
+                'invoice_number': extracted.invoice_number,
+                'provider_name': extracted.provider_name,
+                'cost': line_item.cost
+            })
+        
+        # Bulk create or update all fingerprints at once
+        if fingerprint_items:
+            fingerprint_service.bulk_create_or_update(fingerprint_items, skip_existence_check=False)
     
     def get_invoice_by_number(self, invoice_number: str) -> Optional[Invoice]:
         """
