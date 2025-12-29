@@ -1,0 +1,28 @@
+FROM python:3.13-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# Install system cert tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --upgrade pip certifi
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY src/ src/
+COPY service_account.json .
+
+# Copy entrypoint script
+COPY entrypoints/ entrypoints/
+RUN chmod +x entrypoints/worker.sh
+
+EXPOSE 8080
+
+# Run both Celery worker and health check server
+CMD ["./entrypoints/worker.sh"]
+
