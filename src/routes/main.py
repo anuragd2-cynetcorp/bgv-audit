@@ -41,9 +41,9 @@ def dashboard():
     providers = Provider.list_all()
     
     return render_template('dashboard.html', 
-                         user=session['user'],
-                         invoices=invoices,
-                         providers=providers)
+                        user=session['user'],
+                        invoices=invoices,
+                        providers=providers)
 
 @main_bp.route('/upload', methods=['POST'])
 @login_required
