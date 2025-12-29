@@ -33,7 +33,7 @@ class BaseService(Generic[T]):
         Returns:
             Model instance if found, None otherwise
         """
-        return self.model_class.collection.get(doc_id)
+        return self.model_class.db().get(doc_id)
     
     def create(self, doc_id: str, **kwargs) -> T:
         """
@@ -154,7 +154,7 @@ class BaseService(Generic[T]):
         Returns:
             List of model instances
         """
-        return self.model_class.collection.fetch()
+        return self.model_class.db().fetch()
     
     def _get_firestore_client(self):
         """Get Firestore client instance."""
