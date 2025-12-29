@@ -31,8 +31,6 @@ class InvoiceService(BaseService[Invoice]):
         Raises:
             ValueError: If processing fails
         """
-        if not provider:
-            raise ValueError("Provider instance is required")
         
         # Extract invoice data using the provided provider
         extracted = provider.extract(pdf_path)
