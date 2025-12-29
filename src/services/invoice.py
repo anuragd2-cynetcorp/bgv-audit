@@ -36,7 +36,7 @@ class InvoiceService(BaseService[Invoice]):
         
         # Create invoice document
         # Use invoice_number as document ID for easy lookup
-        invoice = self.create(
+        invoice = self.create_or_update(
             doc_id=extracted.invoice_number,
             filename=filename,
             invoice_number=extracted.invoice_number,
