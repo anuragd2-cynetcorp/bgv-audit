@@ -2,7 +2,7 @@
 Service for invoice processing and management.
 """
 from typing import Dict, List, Optional
-from ..helpers import generate_safe_id
+from src.helpers import generate_fingerprint_id
 from src.models import Invoice, LineItemFingerprint
 from src.services.base import BaseService
 from src.providers.base import BaseProvider, ExtractedInvoice, ExtractedLineItem
@@ -81,10 +81,8 @@ class InvoiceService(BaseService[Invoice]):
                 print(f"Warning: Skipping line item with empty candidate_id or service_description after stripping")
                 continue
             
-            # Create fingerprint ID: candidate_id|service_description
-            fingerprint_str = f"{candidate_id}|{service_description}"
-            
-            fingerprint_id = generate_safe_id(fingerprint_str)
+            # Generate fingerprint ID using centralized function
+            fingerprint_id = generate_fingerprint_id(candidate_id, service_description)
             # Prepare item for bulk operation
             fingerprint_items.append({
                 'doc_id': fingerprint_id,
@@ -146,8 +144,8 @@ class LineItemFingerprintService(BaseService[LineItemFingerprint]):
         Returns:
             LineItemFingerprint if duplicate found, None otherwise
         """
-        # Use same sanitization as in _store_fingerprints
-        fingerprint_id = f"{candidate_id}|{service_description}".replace('|', '__')
+        # Use centralized fingerprint ID generation (consistent with _store_fingerprints)
+        fingerprint_id = generate_fingerprint_id(candidate_id, service_description)
         existing = self.get_by_id(fingerprint_id)
         
         if existing and existing.invoice_id != current_invoice_id:

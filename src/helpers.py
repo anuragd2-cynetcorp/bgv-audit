@@ -90,3 +90,27 @@ def generate_safe_id(raw_string: str) -> str:
         A safe ID for the string
     """
     return hashlib.md5(raw_string.encode('utf-8')).hexdigest()
+
+
+def generate_fingerprint_id(candidate_id: str, service_description: str) -> str:
+    """
+    Generate a consistent fingerprint ID for a line item.
+    This function centralizes the fingerprint generation logic to ensure
+    consistency across all parts of the application.
+    
+    Args:
+        candidate_id: Candidate ID
+        service_description: Service description
+        
+    Returns:
+        MD5 hash of the fingerprint string (candidate_id|service_description)
+    """
+    # Normalize inputs
+    candidate_id = str(candidate_id).strip()
+    service_description = str(service_description).strip()
+    
+    # Create fingerprint string (same format as ExtractedLineItem.fingerprint())
+    fingerprint_str = f"{candidate_id}|{service_description}"
+    
+    # Generate safe ID using hash
+    return generate_safe_id(fingerprint_str)
