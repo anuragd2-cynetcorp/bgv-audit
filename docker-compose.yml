@@ -1,1 +1,14 @@
 services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.local
+    container_name: bgv-audit
+    ports:
+      - "5000:8080"
+    volumes:
+      - ./src:/app/src
+      - ./firebase_auth.json:/app/firebase_auth.json
+    env_file:
+      - .env
+    command: python -m src.app

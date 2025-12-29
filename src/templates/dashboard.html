@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="row">
+    <div class="col-12 mb-4">
+        <h1>Welcome to BGV Audit</h1>
+        <p class="text-muted">Upload PDF invoices to audit for discrepancies</p>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-md-6 col-lg-4">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body d-flex flex-column">
+                <div class="mb-3">
+                    <i class="bi bi-upload fs-1 text-primary"></i>
+                </div>
+                <h5 class="card-title">Upload Invoice</h5>
+                <p class="card-text text-muted">Upload a PDF invoice for automated auditing.</p>
+                <a href="#" class="btn btn-primary mt-auto">
+                    <i class="bi bi-arrow-right me-2"></i>Upload
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 col-lg-4">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body d-flex flex-column">
+                <div class="mb-3">
+                    <i class="bi bi-file-earmark-text fs-1 text-success"></i>
+                </div>
+                <h5 class="card-title">View Reports</h5>
+                <p class="card-text text-muted">View audit reports and historical data.</p>
+                <a href="#" class="btn btn-success mt-auto">
+                    <i class="bi bi-arrow-right me-2"></i>View
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

@@ -1,0 +1,9 @@
+flask
+fireo
+google-cloud-firestore
+authlib
+requests
+gunicorn
+python-dotenv
+flask-wtf
+
