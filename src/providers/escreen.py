@@ -1,25 +1,25 @@
 """
-Provider extractor for UNA Health invoices.
+Provider extractor for eScreen invoices.
 """
 import re
 from typing import List
-from .base_provider import BaseProvider, ExtractedInvoice, ExtractedLineItem
+from .base import BaseProvider, ExtractedInvoice, ExtractedLineItem
 
 
-class UNAHealthProvider(BaseProvider):
-    """Extractor for UNA Health invoices."""
+class EScreenProvider(BaseProvider):
+    """Extractor for eScreen invoices."""
     
     def __init__(self):
-        super().__init__("UNA Health")
-        self.identification_keywords = ["UNA Health", "UNA HEALTH", "unahealth.com"]
+        super().__init__("eScreen")
+        self.identification_keywords = ["eScreen", "ESCREEN", "escreen.com"]
     
     def identify(self, pdf_path: str) -> bool:
-        """Check if this PDF belongs to UNA Health."""
+        """Check if this PDF belongs to eScreen."""
         text = self._get_pdf_text(pdf_path)
         return any(kw.upper() in text.upper() for kw in self.identification_keywords)
     
     def extract(self, pdf_path: str) -> ExtractedInvoice:
-        """Extract invoice data from UNA Health's PDF format."""
+        """Extract invoice data from eScreen's PDF format."""
         text = self._get_pdf_text(pdf_path)
         tables = self._get_pdf_tables(pdf_path)
         
@@ -45,7 +45,7 @@ class UNAHealthProvider(BaseProvider):
     
     def _extract_from_tables(self, tables: List[List[List[str]]]) -> List[ExtractedLineItem]:
         """Extract line items from PDF tables."""
-        # TODO: Implement based on UNA Health's format
+        # TODO: Implement based on eScreen's format
         return []
     
     def _extract_from_text(self, text: str) -> List[ExtractedLineItem]:

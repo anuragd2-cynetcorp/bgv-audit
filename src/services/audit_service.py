@@ -4,7 +4,7 @@ Service for auditing invoices and detecting discrepancies.
 from typing import Dict, List
 from src.models import Invoice
 from src.services.invoice_service import InvoiceService, LineItemFingerprintService
-from src.providers.base_provider import BaseProvider
+from src.providers.base import BaseProvider
 
 
 class AuditResult:

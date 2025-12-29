@@ -1,25 +1,25 @@
 """
-Provider extractor for Universal invoices.
+Provider extractor for InCheck invoices.
 """
 import re
 from typing import List
-from .base_provider import BaseProvider, ExtractedInvoice, ExtractedLineItem
+from .base import BaseProvider, ExtractedInvoice, ExtractedLineItem
 
 
-class UniversalProvider(BaseProvider):
-    """Extractor for Universal invoices."""
+class InCheckProvider(BaseProvider):
+    """Extractor for InCheck invoices."""
     
     def __init__(self):
-        super().__init__("Universal")
-        self.identification_keywords = ["Universal", "UNIVERSAL"]
+        super().__init__("InCheck")
+        self.identification_keywords = ["InCheck", "INCHECK", "incheck.com"]
     
     def identify(self, pdf_path: str) -> bool:
-        """Check if this PDF belongs to Universal."""
+        """Check if this PDF belongs to InCheck."""
         text = self._get_pdf_text(pdf_path)
         return any(kw.upper() in text.upper() for kw in self.identification_keywords)
     
     def extract(self, pdf_path: str) -> ExtractedInvoice:
-        """Extract invoice data from Universal's PDF format."""
+        """Extract invoice data from InCheck's PDF format."""
         text = self._get_pdf_text(pdf_path)
         tables = self._get_pdf_tables(pdf_path)
         
@@ -45,7 +45,7 @@ class UniversalProvider(BaseProvider):
     
     def _extract_from_tables(self, tables: List[List[List[str]]]) -> List[ExtractedLineItem]:
         """Extract line items from PDF tables."""
-        # TODO: Implement based on Universal's format
+        # TODO: Implement based on InCheck's format
         return []
     
     def _extract_from_text(self, text: str) -> List[ExtractedLineItem]:

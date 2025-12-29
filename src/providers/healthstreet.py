@@ -1,25 +1,25 @@
 """
-Provider extractor for Concentra invoices.
+Provider extractor for HealthStreet invoices.
 """
 import re
 from typing import List
-from .base_provider import BaseProvider, ExtractedInvoice, ExtractedLineItem
+from .base import BaseProvider, ExtractedInvoice, ExtractedLineItem
 
 
-class ConcentraProvider(BaseProvider):
-    """Extractor for Concentra invoices."""
+class HealthStreetProvider(BaseProvider):
+    """Extractor for HealthStreet invoices."""
     
     def __init__(self):
-        super().__init__("Concentra")
-        self.identification_keywords = ["Concentra", "CONCENTRA", "concentra.com"]
+        super().__init__("HealthStreet")
+        self.identification_keywords = ["HealthStreet", "HEALTHSTREET", "healthstreet.com"]
     
     def identify(self, pdf_path: str) -> bool:
-        """Check if this PDF belongs to Concentra."""
+        """Check if this PDF belongs to HealthStreet."""
         text = self._get_pdf_text(pdf_path)
         return any(kw.upper() in text.upper() for kw in self.identification_keywords)
     
     def extract(self, pdf_path: str) -> ExtractedInvoice:
-        """Extract invoice data from Concentra's PDF format."""
+        """Extract invoice data from HealthStreet's PDF format."""
         text = self._get_pdf_text(pdf_path)
         tables = self._get_pdf_tables(pdf_path)
         
@@ -45,7 +45,7 @@ class ConcentraProvider(BaseProvider):
     
     def _extract_from_tables(self, tables: List[List[List[str]]]) -> List[ExtractedLineItem]:
         """Extract line items from PDF tables."""
-        # TODO: Implement based on Concentra's format
+        # TODO: Implement based on HealthStreet's format
         return []
     
     def _extract_from_text(self, text: str) -> List[ExtractedLineItem]:

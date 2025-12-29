@@ -1,25 +1,25 @@
 """
-Provider extractor for FastMed invoices.
+Provider extractor for Concentra invoices.
 """
 import re
 from typing import List
-from .base_provider import BaseProvider, ExtractedInvoice, ExtractedLineItem
+from .base import BaseProvider, ExtractedInvoice, ExtractedLineItem
 
 
-class FastMedProvider(BaseProvider):
-    """Extractor for FastMed invoices."""
+class ConcentraProvider(BaseProvider):
+    """Extractor for Concentra invoices."""
     
     def __init__(self):
-        super().__init__("FastMed")
-        self.identification_keywords = ["FastMed", "FASTMED", "fastmed.com"]
+        super().__init__("Concentra")
+        self.identification_keywords = ["Concentra", "CONCENTRA", "concentra.com"]
     
     def identify(self, pdf_path: str) -> bool:
-        """Check if this PDF belongs to FastMed."""
+        """Check if this PDF belongs to Concentra."""
         text = self._get_pdf_text(pdf_path)
         return any(kw.upper() in text.upper() for kw in self.identification_keywords)
     
     def extract(self, pdf_path: str) -> ExtractedInvoice:
-        """Extract invoice data from FastMed's PDF format."""
+        """Extract invoice data from Concentra's PDF format."""
         text = self._get_pdf_text(pdf_path)
         tables = self._get_pdf_tables(pdf_path)
         
@@ -45,7 +45,7 @@ class FastMedProvider(BaseProvider):
     
     def _extract_from_tables(self, tables: List[List[List[str]]]) -> List[ExtractedLineItem]:
         """Extract line items from PDF tables."""
-        # TODO: Implement based on FastMed's format
+        # TODO: Implement based on Concentra's format
         return []
     
     def _extract_from_text(self, text: str) -> List[ExtractedLineItem]:

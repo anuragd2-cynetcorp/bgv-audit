@@ -1,25 +1,25 @@
 """
-Provider extractor for Relias invoices.
+Provider extractor for Summit Health invoices.
 """
 import re
 from typing import List
-from .base_provider import BaseProvider, ExtractedInvoice, ExtractedLineItem
+from .base import BaseProvider, ExtractedInvoice, ExtractedLineItem
 
 
-class ReliasProvider(BaseProvider):
-    """Extractor for Relias invoices."""
+class SummitHealthProvider(BaseProvider):
+    """Extractor for Summit Health invoices."""
     
     def __init__(self):
-        super().__init__("Relias")
-        self.identification_keywords = ["Relias", "RELIAS", "relias.com"]
+        super().__init__("Summit Health")
+        self.identification_keywords = ["Summit Health", "SUMMIT HEALTH", "summithealth.com"]
     
     def identify(self, pdf_path: str) -> bool:
-        """Check if this PDF belongs to Relias."""
+        """Check if this PDF belongs to Summit Health."""
         text = self._get_pdf_text(pdf_path)
         return any(kw.upper() in text.upper() for kw in self.identification_keywords)
     
     def extract(self, pdf_path: str) -> ExtractedInvoice:
-        """Extract invoice data from Relias's PDF format."""
+        """Extract invoice data from Summit Health's PDF format."""
         text = self._get_pdf_text(pdf_path)
         tables = self._get_pdf_tables(pdf_path)
         
@@ -45,7 +45,7 @@ class ReliasProvider(BaseProvider):
     
     def _extract_from_tables(self, tables: List[List[List[str]]]) -> List[ExtractedLineItem]:
         """Extract line items from PDF tables."""
-        # TODO: Implement based on Relias's format
+        # TODO: Implement based on Summit Health's format
         return []
     
     def _extract_from_text(self, text: str) -> List[ExtractedLineItem]:

@@ -3,7 +3,7 @@ Provider extractor for First Advantage invoices.
 """
 import re
 from typing import List
-from .base_provider import BaseProvider, ExtractedInvoice, ExtractedLineItem
+from .base import BaseProvider, ExtractedInvoice, ExtractedLineItem
 
 
 class FirstAdvantageProvider(BaseProvider):

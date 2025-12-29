@@ -1,26 +1,25 @@
 """
-Provider extractor for Quest invoices.
+Provider extractor for CityMD invoices.
 """
 import re
 from typing import List
-from .base_provider import BaseProvider, ExtractedInvoice, ExtractedLineItem
+from .base import BaseProvider, ExtractedInvoice, ExtractedLineItem
 
 
-class QuestProvider(BaseProvider):
-    """Extractor for Quest invoices."""
+class CityMDProvider(BaseProvider):
+    """Extractor for CityMD invoices."""
     
     def __init__(self):
-        super().__init__("Quest")
-        self.identification_keywords = ["Quest", "QUEST", "questdiagnostics.com"]
+        super().__init__("CityMD")
+        self.identification_keywords = ["CityMD", "CITYMD", "citymd.com"]
     
     def identify(self, pdf_path: str) -> bool:
-        """Check if this PDF belongs to Quest."""
+        """Check if this PDF belongs to CityMD."""
         text = self._get_pdf_text(pdf_path)
-        text_upper = text.upper()
-        return any(kw.upper() in text_upper for kw in self.identification_keywords)
+        return any(kw.upper() in text.upper() for kw in self.identification_keywords)
     
     def extract(self, pdf_path: str) -> ExtractedInvoice:
-        """Extract invoice data from Quest's PDF format."""
+        """Extract invoice data from CityMD's PDF format."""
         text = self._get_pdf_text(pdf_path)
         tables = self._get_pdf_tables(pdf_path)
         
@@ -46,7 +45,7 @@ class QuestProvider(BaseProvider):
     
     def _extract_from_tables(self, tables: List[List[List[str]]]) -> List[ExtractedLineItem]:
         """Extract line items from PDF tables."""
-        # TODO: Implement based on Quest's format
+        # TODO: Implement based on CityMD's format
         return []
     
     def _extract_from_text(self, text: str) -> List[ExtractedLineItem]:
