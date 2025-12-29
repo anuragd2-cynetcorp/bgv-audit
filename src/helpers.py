@@ -1,6 +1,7 @@
 """
 Helper functions for the BGV Audit application.
 """
+import hashlib
 from src.providers.base import BaseProvider
 from src.providers.enum import Provider
 
@@ -78,3 +79,14 @@ def get_provider_instance(provider_name: str) -> BaseProvider:
         case _:
             raise ValueError(f"Provider class not found for: {provider_name}")
 
+def generate_safe_id(raw_string: str) -> str:
+    """
+    Generate a safe ID for a string.
+    
+    Args:
+        raw_string: The string to generate a safe ID for
+        
+    Returns:
+        A safe ID for the string
+    """
+    return hashlib.md5(raw_string.encode('utf-8')).hexdigest()

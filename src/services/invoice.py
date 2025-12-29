@@ -2,6 +2,7 @@
 Service for invoice processing and management.
 """
 from typing import Dict, List, Optional
+from ..helpers import generate_safe_id
 from src.models import Invoice, LineItemFingerprint
 from src.services.base import BaseService
 from src.providers.base import BaseProvider, ExtractedInvoice, ExtractedLineItem
@@ -83,24 +84,7 @@ class InvoiceService(BaseService[Invoice]):
             # Create fingerprint ID: candidate_id|service_description
             fingerprint_str = f"{candidate_id}|{service_description}"
             
-            # Sanitize for Firestore: replace | with __ and remove invalid characters
-            # Firestore document ID restrictions:
-            # - Cannot be empty
-            # - Cannot contain certain characters (/, \, ?, #, [, ], *)
-            # - Max length is 1500 bytes
-            fingerprint_id = fingerprint_str.replace('|', '__')
-            fingerprint_id = fingerprint_id.replace('/', '_').replace('\\', '_').replace('?', '_')
-            fingerprint_id = fingerprint_id.replace('#', '_').replace('[', '_').replace(']', '_').replace('*', '_')
-            
-            # Ensure it's not empty after sanitization and has reasonable length
-            if not fingerprint_id or len(fingerprint_id) == 0:
-                print(f"Warning: Skipping line item with empty fingerprint after sanitization")
-                continue
-            
-            if len(fingerprint_id) > 1500:
-                print(f"Warning: Fingerprint too long ({len(fingerprint_id)} chars), truncating")
-                fingerprint_id = fingerprint_id[:1500]
-            
+            fingerprint_id = generate_safe_id(fingerprint_str)
             # Prepare item for bulk operation
             fingerprint_items.append({
                 'doc_id': fingerprint_id,
