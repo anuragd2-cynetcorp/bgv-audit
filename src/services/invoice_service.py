@@ -4,8 +4,7 @@ Service for invoice processing and management.
 from typing import Dict, List, Optional
 from src.models import Invoice, LineItemFingerprint
 from src.services.base_service import BaseService
-from src.providers.provider_registry import get_registry
-from src.providers.base_provider import ExtractedInvoice, ExtractedLineItem
+from src.providers.base_provider import BaseProvider, ExtractedInvoice, ExtractedLineItem
 
 
 class InvoiceService(BaseService[Invoice]):
@@ -15,9 +14,8 @@ class InvoiceService(BaseService[Invoice]):
     
     def __init__(self):
         super().__init__(Invoice)
-        self.provider_registry = get_registry()
     
-    def process_invoice(self, pdf_path: str, filename: str, uploaded_by: str, provider_name: str) -> Invoice:
+    def process_invoice(self, pdf_path: str, filename: str, uploaded_by: str, provider: BaseProvider) -> Invoice:
         """
         Process an uploaded invoice PDF.
         
@@ -25,19 +23,19 @@ class InvoiceService(BaseService[Invoice]):
             pdf_path: Path to the uploaded PDF file
             filename: Original filename
             uploaded_by: Email of the user who uploaded the file
-            provider_name: Required provider name
+            provider: Provider instance to use for extraction
             
         Returns:
             Created Invoice instance
             
         Raises:
-            ValueError: If processing fails or provider_name is invalid
+            ValueError: If processing fails
         """
-        if not provider_name:
-            raise ValueError("Provider name is required")
+        if not provider:
+            raise ValueError("Provider instance is required")
         
-        # Extract invoice data using provider registry
-        extracted = self.provider_registry.extract_invoice(pdf_path, provider_name)
+        # Extract invoice data using the provided provider
+        extracted = provider.extract(pdf_path)
         
         # Create invoice document
         # Use invoice_number as document ID for easy lookup

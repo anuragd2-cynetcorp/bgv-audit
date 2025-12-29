@@ -4,7 +4,7 @@ Service for auditing invoices and detecting discrepancies.
 from typing import Dict, List
 from src.models import Invoice
 from src.services.invoice_service import InvoiceService, LineItemFingerprintService
-from src.providers.provider_registry import get_registry
+from src.providers.base_provider import BaseProvider
 
 
 class AuditResult:
@@ -54,27 +54,30 @@ class AuditService:
     def __init__(self):
         self.invoice_service = InvoiceService()
         self.fingerprint_service = LineItemFingerprintService()
-        self.provider_registry = get_registry()
         self.rounding_tolerance = 0.01  # $0.01 tolerance for rounding differences
     
-    def audit_invoice(self, invoice_id: str, pdf_path: str) -> AuditReport:
+    def audit_invoice(self, invoice_id: str, pdf_path: str, provider: BaseProvider) -> AuditReport:
         """
         Perform complete audit on an invoice.
         
         Args:
             invoice_id: Invoice document ID (invoice number)
             pdf_path: Path to the original PDF file
+            provider: Provider instance to use for extraction
             
         Returns:
             AuditReport object
         """
+        if not provider:
+            raise ValueError("Provider instance is required")
+        
         # Get invoice
         invoice = self.invoice_service.get_by_id(invoice_id)
         if not invoice:
             raise ValueError(f"Invoice {invoice_id} not found")
         
         # Re-extract invoice data (we need line items for audit)
-        extracted = self.provider_registry.extract_invoice(pdf_path, invoice.provider_name)
+        extracted = provider.extract(pdf_path)
         
         # Perform all audit checks
         results = []

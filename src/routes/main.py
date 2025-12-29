@@ -4,6 +4,7 @@ from src.decorators import login_required
 from src.services.invoice_service import InvoiceService
 from src.services.audit_service import AuditService
 from src.providers.provider_enum import Provider
+from src.helpers import get_provider_instance
 import os
 import tempfile
 
@@ -83,6 +84,13 @@ def upload_invoice():
         temp_path = os.path.join(UPLOAD_FOLDER, filename)
         file.save(temp_path)
         
+        # Get provider instance - you need to implement get_provider_instance()
+        # This should return a BaseProvider instance based on provider_name
+        provider = get_provider_instance(provider_name)
+        if not provider:
+            flash(f'Provider class not found for: {provider_name}', 'error')
+            return redirect(url_for('main.dashboard'))
+        
         # Process invoice
         invoice_service = InvoiceService()
         user_email = session['user']['email']
@@ -91,12 +99,12 @@ def upload_invoice():
             pdf_path=temp_path,
             filename=filename,
             uploaded_by=user_email,
-            provider_name=provider_name
+            provider=provider
         )
         
         # Perform audit
         audit_service = AuditService()
-        audit_report = audit_service.audit_invoice(invoice.invoice_number, temp_path)
+        audit_report = audit_service.audit_invoice(invoice.invoice_number, temp_path, provider)
         
         # Clean up temp file
         try:
