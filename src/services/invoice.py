@@ -3,7 +3,7 @@ Service for invoice processing and management.
 """
 from typing import Dict, List, Optional
 from src.models import Invoice, LineItemFingerprint
-from src.services.base_service import BaseService
+from src.services.base import BaseService
 from src.providers.base import BaseProvider, ExtractedInvoice, ExtractedLineItem
 
 

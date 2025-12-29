@@ -1,8 +1,8 @@
 from flask import Blueprint, render_template, session, redirect, url_for, request, jsonify, flash
 from werkzeug.utils import secure_filename
 from src.decorators import login_required
-from src.services.invoice_service import InvoiceService
-from src.services.audit_service import AuditService
+from src.services.invoice import InvoiceService
+from src.services.audit import AuditService
 from src.providers.enum import Provider
 from src.helpers import get_provider_instance
 import os

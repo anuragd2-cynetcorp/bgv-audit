@@ -1,6 +1,6 @@
 from flask import Blueprint, redirect, url_for, session, flash, current_app
 from src.extensions import oauth
-from src.services.user_service import UserService
+from src.services.user import UserService
 
 auth_bp = Blueprint('auth', __name__)
 user_service = UserService()

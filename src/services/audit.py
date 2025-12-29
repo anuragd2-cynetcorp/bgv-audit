@@ -3,7 +3,7 @@ Service for auditing invoices and detecting discrepancies.
 """
 from typing import Dict, List
 from src.models import Invoice
-from src.services.invoice_service import InvoiceService, LineItemFingerprintService
+from src.services.invoice import InvoiceService, LineItemFingerprintService
 from src.providers.base import BaseProvider
 
 
