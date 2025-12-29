@@ -123,7 +123,7 @@ class InvoiceService(BaseService[Invoice]):
             List of Invoice instances
         """
         # FireO query example - adjust based on your FireO version
-        return Invoice.collection.filter('uploaded_by', '==', user_email).fetch()
+        return Invoice.db().filter('uploaded_by', '==', user_email).fetch()
 
 
 class LineItemFingerprintService(BaseService[LineItemFingerprint]):
