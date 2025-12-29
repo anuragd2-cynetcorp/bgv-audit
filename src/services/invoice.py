@@ -62,9 +62,40 @@ class InvoiceService(BaseService[Invoice]):
         fingerprint_service = LineItemFingerprintService()
         
         for line_item in extracted.line_items:
+            # Validate required fields
+            if not line_item.candidate_id or not line_item.service_description:
+                print(f"Warning: Skipping line item with missing candidate_id or service_description. "
+                      f"candidate_id='{line_item.candidate_id}', service_description='{line_item.service_description}'")
+                continue
+            
+            # Ensure candidate_id and service_description are strings and not empty
+            candidate_id = str(line_item.candidate_id).strip()
+            service_description = str(line_item.service_description).strip()
+            
+            if not candidate_id or not service_description:
+                print(f"Warning: Skipping line item with empty candidate_id or service_description after stripping")
+                continue
+            
             # Create fingerprint ID: candidate_id|service_description
-            # Sanitize for Firestore: replace | with __ (Firestore doesn't allow | in doc IDs)
-            fingerprint_id = line_item.fingerprint().replace('|', '__')
+            fingerprint_str = f"{candidate_id}|{service_description}"
+            
+            # Sanitize for Firestore: replace | with __ and remove invalid characters
+            # Firestore document ID restrictions:
+            # - Cannot be empty
+            # - Cannot contain certain characters (/, \, ?, #, [, ], *)
+            # - Max length is 1500 bytes
+            fingerprint_id = fingerprint_str.replace('|', '__')
+            fingerprint_id = fingerprint_id.replace('/', '_').replace('\\', '_').replace('?', '_')
+            fingerprint_id = fingerprint_id.replace('#', '_').replace('[', '_').replace(']', '_').replace('*', '_')
+            
+            # Ensure it's not empty after sanitization and has reasonable length
+            if not fingerprint_id or len(fingerprint_id) == 0:
+                print(f"Warning: Skipping line item with empty fingerprint after sanitization")
+                continue
+            
+            if len(fingerprint_id) > 1500:
+                print(f"Warning: Fingerprint too long ({len(fingerprint_id)} chars), truncating")
+                fingerprint_id = fingerprint_id[:1500]
             
             # Check if this fingerprint already exists (historical duplicate)
             existing = fingerprint_service.get_by_id(fingerprint_id)

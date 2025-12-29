@@ -68,13 +68,20 @@ class AuditService:
         Returns:
             AuditReport object
         """
-        if not provider:
-            raise ValueError("Provider instance is required")
-        
         # Get invoice
+        # Try using invoice_number as doc_id (since that's what we use when creating)
         invoice = self.invoice_service.get_by_id(invoice_id)
         if not invoice:
-            raise ValueError(f"Invoice {invoice_id} not found")
+            # If not found, try to get by invoice_number field as fallback
+            # This handles cases where the document ID might differ
+            try:
+                invoices = self.invoice_service.list_invoices_by_user("")  # Empty to get all
+                invoice = next((inv for inv in invoices if inv.invoice_number == invoice_id), None)
+            except:
+                pass
+        
+        if not invoice:
+            raise ValueError(f"Invoice {invoice_id} not found. Please ensure the invoice was created successfully.")
         
         # Re-extract invoice data (we need line items for audit)
         extracted = provider.extract(pdf_path)

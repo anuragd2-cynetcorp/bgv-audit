@@ -109,9 +109,13 @@ class QuestProvider(BaseProvider):
                         # If description starts with the candidate name, strip it.
                         if current_candidate_name and description.startswith(current_candidate_name):
                             description = description.replace(current_candidate_name, "").strip()
+                        
+                        # Validate that we have required fields
+                        if not current_candidate_id or not description:
+                            continue
 
                         item = ExtractedLineItem(
-                            candidate_name=current_candidate_name,
+                            candidate_name=current_candidate_name or "",
                             candidate_id=current_candidate_id,
                             service_description=description,
                             cost=amount
