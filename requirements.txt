@@ -6,4 +6,6 @@ requests
 gunicorn
 python-dotenv
 flask-wtf
+pdfplumber
+PyPDF2
 

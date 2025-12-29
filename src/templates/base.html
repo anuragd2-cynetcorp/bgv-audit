@@ -23,10 +23,10 @@
                     {% if session.get('user') %}
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="profileDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                {% if session.user.picture %}
-                                    <img src="{{ session.user.picture }}" class="rounded-circle me-2" width="32" height="32" alt="Profile" style="object-fit: cover;">
+                                {% if session['user'].picture %}
+                                    <img src="{{ session['user'].picture }}" class="rounded-circle me-2" width="32" height="32" alt="Profile" style="object-fit: cover;">
                                 {% endif %}
-                                <span class="text-dark">{{ session.user.name }}</span>
+                                <span class="text-dark">{{ session['user'].name }}</span>
                             </a>
                             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="profileDropdown">
                                 <li>

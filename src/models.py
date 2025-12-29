@@ -1,6 +1,7 @@
 from fireo.models import Model
-from fireo.fields import TextField, DateTime, NumberField
+from fireo.fields import TextField, DateTime, NumberField, ListField, MapField
 from .config import Config
+from typing import Dict, List, Optional
 
 class BaseModel(Model):
     """
@@ -39,3 +40,38 @@ class User(BaseModel):
 
     class Meta:
         collection_name = "users"
+
+
+class Invoice(BaseModel):
+    """
+    Invoice metadata model.
+    Stores minimal data as per requirements - not the full PDF.
+    """
+    filename = TextField(required=True)
+    invoice_number = TextField(required=True)
+    provider_name = TextField(required=True)
+    grand_total = NumberField(required=True)
+    upload_date = DateTime(auto=True)
+    uploaded_by = TextField(required=True)  # User email
+    audit_status = TextField()  # "PASS", "FAIL", "PENDING"
+    audit_report = MapField()  # JSON summary of audit results
+    
+    class Meta:
+        collection_name = "invoices"
+
+
+class LineItemFingerprint(BaseModel):
+    """
+    Stores fingerprints of processed line items for historical duplicate detection.
+    Fingerprint = Candidate ID + Service Description
+    """
+    candidate_id = TextField(required=True)
+    service_description = TextField(required=True)
+    invoice_id = TextField(required=True)  # Reference to Invoice document ID
+    invoice_number = TextField(required=True)  # For easier querying
+    provider_name = TextField(required=True)
+    cost = NumberField(required=True)
+    processed_date = DateTime(auto=True)
+    
+    class Meta:
+        collection_name = "line_item_fingerprints"

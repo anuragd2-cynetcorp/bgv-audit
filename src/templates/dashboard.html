@@ -2,42 +2,118 @@
 {% block title %}Dashboard{% endblock %}
 {% block content %}
 <div class="row">
-    <div class="col-12 mb-4">
-        <h1>Welcome to BGV Audit</h1>
-        <p class="text-muted">Upload PDF invoices to audit for discrepancies</p>
+    <div class="col-12 mb-4 d-flex justify-content-between align-items-center">
+        <div>
+            <h1>Welcome, {{ user.name }}</h1>
+            <p class="text-muted">Upload PDF invoices to audit for discrepancies</p>
+        </div>
+        <button type="button" class="btn btn-primary btn-lg" data-bs-toggle="modal" data-bs-target="#uploadModal">
+            <i class="bi bi-upload me-2"></i>Upload Invoice
+        </button>
     </div>
 </div>
 
-<div class="row g-4">
-    <div class="col-md-6 col-lg-4">
-        <div class="card h-100 shadow-sm">
-            <div class="card-body d-flex flex-column">
-                <div class="mb-3">
-                    <i class="bi bi-upload fs-1 text-primary"></i>
-                </div>
-                <h5 class="card-title">Upload Invoice</h5>
-                <p class="card-text text-muted">Upload a PDF invoice for automated auditing.</p>
-                <a href="#" class="btn btn-primary mt-auto">
-                    <i class="bi bi-arrow-right me-2"></i>Upload
-                </a>
+<!-- Upload Modal -->
+<div class="modal fade" id="uploadModal" tabindex="-1" aria-labelledby="uploadModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="uploadModalLabel">Upload Invoice PDF</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
+            <form action="{{ url_for('main.upload_invoice') }}" method="POST" enctype="multipart/form-data">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="file" class="form-label">Select PDF File</label>
+                        <input type="file" class="form-control" id="file" name="file" accept=".pdf" required>
+                        <div class="form-text">Only PDF files are supported.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="provider_name" class="form-label">Provider <span class="text-danger">*</span></label>
+                        <select class="form-select" id="provider_name" name="provider_name" required>
+                            <option value="">-- Select Provider --</option>
+                            {% if providers %}
+                                {% for provider in providers %}
+                                    <option value="{{ provider }}">{{ provider }}</option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
+                        <div class="form-text">Please select the provider for this invoice.</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-upload me-2"></i>Upload & Process
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
-    
-    <div class="col-md-6 col-lg-4">
-        <div class="card h-100 shadow-sm">
-            <div class="card-body d-flex flex-column">
-                <div class="mb-3">
-                    <i class="bi bi-file-earmark-text fs-1 text-success"></i>
-                </div>
-                <h5 class="card-title">View Reports</h5>
-                <p class="card-text text-muted">View audit reports and historical data.</p>
-                <a href="#" class="btn btn-success mt-auto">
-                    <i class="bi bi-arrow-right me-2"></i>View
-                </a>
+</div>
+
+<!-- Invoices List -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-header bg-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-file-earmark-text me-2"></i>Your Invoices
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if invoices %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Invoice Number</th>
+                                    <th>Provider</th>
+                                    <th>Filename</th>
+                                    <th>Grand Total</th>
+                                    <th>Status</th>
+                                    <th>Upload Date</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for invoice in invoices %}
+                                <tr>
+                                    <td><strong>{{ invoice.invoice_number }}</strong></td>
+                                    <td>{{ invoice.provider_name }}</td>
+                                    <td>{{ invoice.filename }}</td>
+                                    <td>${{ "%.2f"|format(invoice.grand_total) }}</td>
+                                    <td>
+                                        {% if invoice.audit_status == 'PASS' %}
+                                            <span class="badge bg-success">PASS</span>
+                                        {% elif invoice.audit_status == 'FAIL' %}
+                                            <span class="badge bg-danger">FAIL</span>
+                                        {% else %}
+                                            <span class="badge bg-warning">PENDING</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ invoice.upload_date.strftime('%Y-%m-%d %H:%M') if invoice.upload_date else 'N/A' }}</td>
+                                    <td>
+                                        <a href="{{ url_for('main.view_invoice', invoice_number=invoice.invoice_number) }}" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye me-1"></i>View
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-inbox fs-1 text-muted"></i>
+                        <p class="text-muted mt-3">No invoices uploaded yet.</p>
+                        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#uploadModal">
+                            <i class="bi bi-upload me-2"></i>Upload Your First Invoice
+                        </button>
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>
 </div>
 {% endblock %}
-

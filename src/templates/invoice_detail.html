@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}Invoice {{ invoice.invoice_number }}{% endblock %}
+{% block content %}
+<div class="row">
+    <div class="col-12 mb-4">
+        <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary mb-3">
+            <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
+        </a>
+        <h1>Invoice Details</h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4 mb-4">
+        <div class="card shadow-sm">
+            <div class="card-header bg-white">
+                <h5 class="mb-0">Invoice Information</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-borderless mb-0">
+                    <tr>
+                        <td><strong>Invoice Number:</strong></td>
+                        <td>{{ invoice.invoice_number }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Provider:</strong></td>
+                        <td>{{ invoice.provider_name }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Filename:</strong></td>
+                        <td>{{ invoice.filename }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Grand Total:</strong></td>
+                        <td><strong class="text-primary">${{ "%.2f"|format(invoice.grand_total) }}</strong></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Upload Date:</strong></td>
+                        <td>{{ invoice.upload_date.strftime('%Y-%m-%d %H:%M:%S') if invoice.upload_date else 'N/A' }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Status:</strong></td>
+                        <td>
+                            {% if invoice.audit_status == 'PASS' %}
+                                <span class="badge bg-success fs-6">PASS</span>
+                            {% elif invoice.audit_status == 'FAIL' %}
+                                <span class="badge bg-danger fs-6">FAIL</span>
+                            {% else %}
+                                <span class="badge bg-warning fs-6">PENDING</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8 mb-4">
+        <div class="card shadow-sm">
+            <div class="card-header bg-white">
+                <h5 class="mb-0">Audit Report</h5>
+            </div>
+            <div class="card-body">
+                {% if invoice.audit_report %}
+                    {% set report = invoice.audit_report %}
+                    <div class="mb-4">
+                        <h6>Overall Status: 
+                            {% if report.overall_status == 'PASS' %}
+                                <span class="badge bg-success fs-6">PASS</span>
+                            {% else %}
+                                <span class="badge bg-danger fs-6">FAIL</span>
+                            {% endif %}
+                        </h6>
+                        <p class="text-muted mb-0">
+                            {{ report.passed_checks }} of {{ report.total_checks }} checks passed
+                        </p>
+                    </div>
+
+                    <div class="accordion" id="auditAccordion">
+                        {% for result in report.results %}
+                        <div class="accordion-item">
+                            <h2 class="accordion-header" id="heading{{ loop.index }}">
+                                <button class="accordion-button {% if not result.passed %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ loop.index }}" aria-expanded="{% if result.passed %}false{% else %}true{% endif %}">
+                                    <span class="me-2">
+                                        {% if result.passed %}
+                                            <i class="bi bi-check-circle-fill text-success"></i>
+                                        {% else %}
+                                            <i class="bi bi-x-circle-fill text-danger"></i>
+                                        {% endif %}
+                                    </span>
+                                    {{ result.check_name }}
+                                </button>
+                            </h2>
+                            <div id="collapse{{ loop.index }}" class="accordion-collapse collapse {% if not result.passed %}show{% endif %}" aria-labelledby="heading{{ loop.index }}">
+                                <div class="accordion-body">
+                                    <p><strong>{{ result.message }}</strong></p>
+                                    {% if result.details %}
+                                        {% if result.details.duplicates %}
+                                            <div class="mt-3">
+                                                <h6>Duplicate Items:</h6>
+                                                <div class="table-responsive">
+                                                    <table class="table table-sm table-bordered">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Row</th>
+                                                                <th>Candidate ID</th>
+                                                                <th>Service Description</th>
+                                                                <th>Cost</th>
+                                                                {% if result.details.duplicates[0].previously_billed_in %}
+                                                                    <th>Previously Billed In</th>
+                                                                {% elif result.details.duplicates[0].duplicate_of_row %}
+                                                                    <th>Duplicate Of Row</th>
+                                                                {% endif %}
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {% for dup in result.details.duplicates %}
+                                                            <tr>
+                                                                <td>{{ dup.row_number }}</td>
+                                                                <td>{{ dup.candidate_id }}</td>
+                                                                <td>{{ dup.service_description }}</td>
+                                                                <td>${{ "%.2f"|format(dup.cost) }}</td>
+                                                                {% if dup.previously_billed_in %}
+                                                                    <td>{{ dup.previously_billed_in }}</td>
+                                                                {% elif dup.duplicate_of_row %}
+                                                                    <td>Row {{ dup.duplicate_of_row }}</td>
+                                                                {% endif %}
+                                                            </tr>
+                                                            {% endfor %}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        {% elif result.details.difference %}
+                                            <div class="alert alert-warning">
+                                                <strong>Difference:</strong> ${{ "%.2f"|format(result.details.difference) }}
+                                            </div>
+                                        {% endif %}
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>Audit report not available yet. The invoice may still be processing.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
