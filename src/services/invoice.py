@@ -4,7 +4,7 @@ Service for invoice processing and management.
 from typing import Dict, List, Optional
 from src.models import Invoice, LineItemFingerprint
 from src.services.base import BaseService
-from src.providers.base import BaseProvider, ExtractedInvoice, ExtractedLineItem, generate_fingerprint_id
+from src.providers.base import ExtractedInvoice, generate_fingerprint_id
 
 
 class InvoiceService(BaseService[Invoice]):
@@ -15,15 +15,14 @@ class InvoiceService(BaseService[Invoice]):
     def __init__(self):
         super().__init__(Invoice)
     
-    def process_invoice(self, pdf_path: str, filename: str, uploaded_by: str, provider: BaseProvider) -> Invoice:
+    def process_invoice(self, filename: str, uploaded_by: str, extracted: ExtractedInvoice) -> Invoice:
         """
         Process an uploaded invoice PDF.
         
         Args:
-            pdf_path: Path to the uploaded PDF file
             filename: Original filename
             uploaded_by: Email of the user who uploaded the file
-            provider: Provider instance to use for extraction
+            extracted: Pre-extracted invoice data
             
         Returns:
             Created Invoice instance
@@ -31,8 +30,6 @@ class InvoiceService(BaseService[Invoice]):
         Raises:
             ValueError: If processing fails
         """
-        # Extract invoice data using the provided provider
-        extracted = provider.extract(pdf_path)
         
         # Create invoice document
         invoice = self.create_or_update(

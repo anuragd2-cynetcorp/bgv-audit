@@ -103,20 +103,22 @@ def upload_invoice():
                 'message': f'Provider class not found for: {provider_name}'
             }), 400
         
+        # Extract invoice data once
+        extracted = provider.extract(temp_path)
+        
         # Process invoice
         invoice_service = InvoiceService()
         user_email = session['user']['email']
         
         invoice = invoice_service.process_invoice(
-            pdf_path=temp_path,
             filename=filename,
             uploaded_by=user_email,
-            provider=provider
+            extracted=extracted
         )
         
-        # Perform audit
+        # Perform audit (reuses extracted data)
         audit_service = AuditService()
-        audit_report = audit_service.audit_invoice(invoice.id, temp_path, provider)
+        audit_report = audit_service.audit_invoice(invoice.id, extracted=extracted)
         
         # Clean up temp file
         try:
