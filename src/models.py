@@ -63,15 +63,21 @@ class Invoice(BaseModel):
 class LineItemFingerprint(BaseModel):
     """
     Stores fingerprints of processed line items for historical duplicate detection.
-    Fingerprint = Candidate ID + Service Description
+    Fingerprint = Date + Candidate ID + Name + Amount
     """
     candidate_id = TextField(required=True)
-    service_description = TextField(required=True)
-    invoice_id = TextField(required=True)  # Reference to Invoice document ID
-    invoice_number = TextField(required=True)  # For easier querying
-    provider_name = TextField(required=True)
+    candidate_name = TextField(required=True)
+    service_date = TextField(required=True)  # Stores "Date of Collection" or "Check Date"
     cost = NumberField(required=True)
-    processed_date = DateTime(auto=True)
     
+    # Context Fields
+    invoice_id = TextField(required=True)
+    provider_name = TextField(required=True)
+    
+    # Optional: Store the extra data as a Map/JSON if needed for debugging
+    metadata = MapField() 
+
     class Meta:
         collection_name = "line_item_fingerprints"
+
+  

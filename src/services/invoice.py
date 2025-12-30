@@ -36,7 +36,6 @@ class InvoiceService(BaseService[Invoice]):
         extracted = provider.extract(pdf_path)
         
         # Create invoice document
-        # Use invoice_number as document ID for easy lookup
         invoice = self.create_or_update(
             doc_id=extracted.invoice_number,
             filename=filename,
@@ -54,12 +53,7 @@ class InvoiceService(BaseService[Invoice]):
     
     def _store_fingerprints(self, invoice_id: str, extracted: ExtractedInvoice):
         """
-        Store fingerprints of line items for historical duplicate detection.
-        Uses bulk create/update for efficiency.
-        
-        Args:
-            invoice_id: Invoice document ID
-            extracted: ExtractedInvoice object
+        Store fingerprints based on Date, ID, Name, and Amount.
         """
         fingerprint_service = LineItemFingerprintService()
         
@@ -67,34 +61,44 @@ class InvoiceService(BaseService[Invoice]):
         fingerprint_items = []
         
         for line_item in extracted.line_items:
-            # Validate required fields
-            if not line_item.candidate_id or not line_item.service_description:
-                print(f"Warning: Skipping line item with missing candidate_id or service_description. "
-                      f"candidate_id='{line_item.candidate_id}', service_description='{line_item.service_description}'")
+            # Validate required fields based on NEW requirements
+            if not line_item.candidate_id or not line_item.date_of_collection:
+                print(f"Warning: Skipping line item missing ID or Date. ID: {line_item.candidate_id}")
                 continue
             
-            # Ensure candidate_id and service_description are strings and not empty
+            # Clean data
             candidate_id = str(line_item.candidate_id).strip()
-            service_description = str(line_item.service_description).strip()
+            patient_name = str(line_item.candidate_name).strip()
+            date_of_collection = str(line_item.date_of_collection).strip()
+            amount = line_item.cost # Float
             
-            if not candidate_id or not service_description:
-                print(f"Warning: Skipping line item with empty candidate_id or service_description after stripping")
-                continue
+            # Generate fingerprint ID using NEW criteria
+            # (Date + ID + Name + Amount)
+            fingerprint_id = generate_fingerprint_id(
+                date_of_collection, 
+                candidate_id, 
+                patient_name, 
+                amount
+            )
             
-            # Generate fingerprint ID using centralized function
-            fingerprint_id = generate_fingerprint_id(candidate_id, service_description)
             # Prepare item for bulk operation
             fingerprint_items.append({
                 'doc_id': fingerprint_id,
-                'candidate_id': candidate_id,
-                'service_description': service_description,
                 'invoice_id': invoice_id,
                 'invoice_number': extracted.invoice_number,
                 'provider_name': extracted.provider_name,
-                'cost': line_item.cost
+                
+                # Store the fields we care about
+                'candidate_id': candidate_id,
+                'patient_name': patient_name,
+                'date_of_collection': date_of_collection,
+                'cost': amount,
+                
+                # We can leave service_description empty or store it for reference only
+                'service_description': line_item.service_description 
             })
         
-        # Bulk create or update all fingerprints at once
+        # Bulk create or update
         if fingerprint_items:
             fingerprint_service.bulk_create_or_update(fingerprint_items, skip_existence_check=False)
     
@@ -132,20 +136,18 @@ class LineItemFingerprintService(BaseService[LineItemFingerprint]):
     def __init__(self):
         super().__init__(LineItemFingerprint)
     
-    def check_historical_duplicate(self, candidate_id: str, service_description: str, current_invoice_id: str) -> Optional[LineItemFingerprint]:
+    def check_historical_duplicate(self, date_of_collection: str, candidate_id: str, patient_name: str, amount: float, current_invoice_id: str) -> Optional[LineItemFingerprint]:
         """
-        Check if a line item has been billed before in a different invoice.
+        Check if a line item has been billed before based on Date, ID, Name, and Amount.
+        """
+        # Generate ID using the exact same logic as storage
+        fingerprint_id = generate_fingerprint_id(
+            date_of_collection, 
+            candidate_id, 
+            patient_name, 
+            amount
+        )
         
-        Args:
-            candidate_id: Candidate ID
-            service_description: Service description
-            current_invoice_id: Current invoice ID (to exclude from check)
-            
-        Returns:
-            LineItemFingerprint if duplicate found, None otherwise
-        """
-        # Use centralized fingerprint ID generation (consistent with _store_fingerprints)
-        fingerprint_id = generate_fingerprint_id(candidate_id, service_description)
         existing = self.get_by_id(fingerprint_id)
         
         if existing and existing.invoice_id != current_invoice_id:

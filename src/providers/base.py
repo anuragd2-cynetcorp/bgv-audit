@@ -10,24 +10,36 @@ import pdfplumber
 
 class ExtractedLineItem:
     """Represents a single line item extracted from an invoice."""
-    def __init__(self, candidate_name: str, candidate_id: str, service_description: str, cost: float):
-        self.candidate_name = candidate_name
+    def __init__(
+        self, 
+        service_date: str,          # Normalized Date
+        candidate_id: str, 
+        candidate_name: str, 
+        amount: float, 
+        service_description: str,   # Normalized Description
+        metadata: Dict = None       # Store extra provider-specific stuff here
+    ):
+        self.service_date = service_date
         self.candidate_id = candidate_id
+        self.candidate_name = candidate_name
+        self.amount = amount
         self.service_description = service_description
-        self.cost = cost
+        self.metadata = metadata or {}
     
     def to_dict(self) -> Dict:
         """Convert line item to dictionary."""
         return {
-            'candidate_name': self.candidate_name,
+            'service_date': self.service_date,
             'candidate_id': self.candidate_id,
+            'candidate_name': self.candidate_name,
+            'amount': self.amount,
             'service_description': self.service_description,
-            'cost': self.cost
+            'metadata': self.metadata
         }
     
     def fingerprint(self) -> str:
         """Generate a unique fingerprint for duplicate detection."""
-        return f"{self.candidate_id}|{self.service_description}"
+        return f"{self.service_date}|{self.candidate_id}|{self.candidate_name}|{self.amount:.2f}"
 
 
 class ExtractedInvoice:
