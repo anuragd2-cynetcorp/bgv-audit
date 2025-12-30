@@ -20,29 +20,52 @@ class QuestProvider(BaseProvider):
     """
     
     def __init__(self):
+        """Initialize the Quest provider with specific identification keywords."""
         super().__init__("Quest Diagnostics")
         
     def identify(self, pdf_path: str) -> bool:
-        """Check for Quest logo text or specific address patterns."""
+        """
+        Check for Quest logo text or specific address patterns.
+        
+        Args:
+            pdf_path: Path to the PDF file.
+            
+        Returns:
+            True if the PDF contains Quest identifiers.
+        """
         text = self._get_pdf_text(pdf_path)
+        # Check for common Quest identifiers in the raw text
         return "QUEST DIAGNOSTICS" in text.upper() or "QUESTDIAGNOSTICS.COM" in text.upper()
 
     def extract(self, pdf_path: str) -> ExtractedInvoice:
+        """
+        Extract invoice data from Quest's PDF format using a state machine approach.
+        
+        Args:
+            pdf_path: Path to the PDF file.
+            
+        Returns:
+            ExtractedInvoice object containing metadata and line items.
+            
+        Raises:
+            ValueError: If critical information (Total, Line Items) cannot be found.
+        """
         invoice_number = "UNKNOWN"
         grand_total = 0.0
         line_items = []
         
-        # State machine variables
+        # State machine variables to hold context across lines
+        current_date = None
         current_candidate_id = None
         current_candidate_name = None
         
         with pdfplumber.open(pdf_path) as pdf:
-            # 1. Extract Header Info (usually Page 1)
+            # 1. Extract Header Info (usually found on Page 1)
             first_page_text = pdf.pages[0].extract_text()
             
             # Extract Invoice Number
             # Pattern: "12069956 NDA 9218249080 11/24/2025" (Client | Code | Invoice | Date)
-            # We look for the 10-digit number starting with 9 (common for Quest) or just the position
+            # We look for the 10-digit number starting with 9 (common for Quest)
             inv_match = re.search(r'\d+\s+NDA\s+(\d+)\s+\d{2}/\d{2}/\d{4}', first_page_text)
             if inv_match:
                 invoice_number = inv_match.group(1)
@@ -53,7 +76,7 @@ class QuestProvider(BaseProvider):
             if total_match:
                 grand_total = float(total_match.group(1).replace(',', ''))
 
-            # 2. Extract Line Items (Iterate all pages)
+            # 2. Extract Line Items (Iterate through all pages)
             for page in pdf.pages:
                 text = page.extract_text()
                 if not text:
@@ -67,33 +90,25 @@ class QuestProvider(BaseProvider):
                     # --- Pattern A: New Candidate Line ---
                     # Regex: Date | Specimen | Patient ID | Name
                     # Example: "10/31/2025 0789055 244677729 BAUTISTA,B"
+                    # Group 1: Date (MM/DD/YYYY)
+                    # Group 2: Specimen ID (Ignored for now)
+                    # Group 3: Patient ID (Candidate ID)
+                    # Group 4: Patient Name
                     candidate_match = re.match(r'^(\d{2}/\d{2}/\d{4})\s+(\d+)\s+([A-Z0-9]+)\s+(.*)', line)
                     
                     if candidate_match:
                         # Update State
-                        # Group 2 is Specimen Number (Unique per visit)
-                        # Group 3 is Patient ID (Employee ID/SSN - Unique per person)
-                        # Group 4 is Name
+                        current_date = candidate_match.group(1)
+                        current_candidate_id = candidate_match.group(3)
+                        current_candidate_name = candidate_match.group(4).strip()
                         
-                        # We use Patient ID (Group 3) as the primary ID for historical duplicate checking
-                        # If Group 3 looks like a name (alpha only), swap logic (handling OCR quirks)
-                        raw_id = candidate_match.group(3)
-                        raw_name = candidate_match.group(4)
-                        
-                        current_candidate_id = raw_id
-                        current_candidate_name = raw_name
-                        
-                        # Note: Sometimes the first service is on the SAME line as the candidate.
-                        # We check if the end of this line looks like a service cost.
-                        # However, in the provided screenshots, services are usually on the next line 
-                        # or the line ends with the name. We will rely on the Service Line check below 
-                        # to catch it if it wraps or is on the same line.
+                        # Note: We do not create a line item yet. We wait for the service lines
+                        # that follow this header.
                         
                     # --- Pattern B: Service Line ---
                     # Regex: Description | 7-digit Code | Amount
                     # Example: "SAP 10-50 + OXY/MEP/N 0019507 $141.75"
-                    # Example: "(U) COL PREF 0035499 $22.00"
-                    # We exclude "PATIENT TOTAL" explicitly
+                    # We exclude "PATIENT TOTAL" explicitly as it is a sub-sum line
                     
                     if "PATIENT TOTAL" in line:
                         continue
@@ -101,30 +116,43 @@ class QuestProvider(BaseProvider):
                     # Look for 7 digit code followed by price at end of line
                     service_match = re.search(r'(?P<desc>.+?)\s+(?P<code>\d{7})\s+\$(?P<amount>[\d,]+\.\d{2})$', line)
                     
-                    if service_match and current_candidate_id:
+                    # We only extract if we have a valid context (Candidate ID and Date)
+                    if service_match and current_candidate_id and current_date:
                         description = service_match.group('desc').strip()
                         amount = float(service_match.group('amount').replace(',', ''))
                         
-                        # Clean up description (sometimes it catches the candidate name if on same line)
-                        # If description starts with the candidate name, strip it.
+                        # Clean up description:
+                        # Sometimes the description line starts with the candidate name if the PDF 
+                        # formatting is tight. If description starts with the candidate name, strip it.
                         if current_candidate_name and description.startswith(current_candidate_name):
                             description = description.replace(current_candidate_name, "").strip()
                         
-                        # Validate that we have required fields
-                        if not current_candidate_id or not description:
+                        # Final validation before adding
+                        if not description:
                             continue
 
+                        # Create the standardized line item
+                        # Note: We pass 'current_date' as 'service_date'
                         item = ExtractedLineItem(
-                            candidate_name=current_candidate_name or "",
+                            candidate_name=current_candidate_name or "Unknown",
                             candidate_id=current_candidate_id,
+                            amount=amount,
+                            service_date=current_date,
                             service_description=description,
-                            cost=amount
+                            metadata={
+                                "service_code": service_match.group('code')
+                            }
                         )
                         line_items.append(item)
 
+        # Validation: Ensure we actually extracted data
         if not line_items:
-            raise ValueError("Could not extract line items from invoice")
+            # If regex failed, it might be a scanned image or a changed format
+            raise ValueError("Could not extract line items from invoice. Format may have changed or file is scanned.")
         
+        if grand_total == 0.0:
+             raise ValueError("Could not extract Grand Total from invoice.")
+
         return ExtractedInvoice(
             invoice_number=invoice_number,
             provider_name=self.name,
