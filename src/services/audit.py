@@ -155,6 +155,7 @@ class AuditService:
                 duplicates.append({
                     'row_number': idx + 1,
                     'candidate_id': item.candidate_id,
+                    'candidate_name': item.candidate_name,
                     'service_description': item.service_description,
                     'amount': item.amount,
                     'duplicate_of_row': fingerprints[fingerprint] + 1

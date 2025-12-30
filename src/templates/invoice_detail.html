@@ -104,6 +104,7 @@
                                                             <tr>
                                                                 <th>Row</th>
                                                                 <th>Candidate ID</th>
+                                                                <th>Candidate Name</th>
                                                                 <th>Service Description</th>
                                                                 <th>Amount</th>
                                                                 {% if result.details.duplicates[0].duplicate_of_row %}
@@ -116,6 +117,7 @@
                                                             <tr>
                                                                 <td>{{ dup.row_number }}</td>
                                                                 <td>{{ dup.candidate_id }}</td>
+                                                                <td>{{ dup.candidate_name or 'N/A' }}</td>
                                                                 <td>{{ dup.service_description }}</td>
                                                                 <td>${{ "%.2f"|format(dup.amount) }}</td>
                                                                 {% if dup.duplicate_of_row %}
