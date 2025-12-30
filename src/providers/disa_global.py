@@ -99,7 +99,8 @@ class DisaGlobalProvider(BaseProvider):
             candidate_name_idx = None
             candidate_id_idx = None
             service_desc_idx = None
-            cost_idx = None
+            service_date_idx = None
+            amount_idx = None
             
             for idx, header in enumerate(header_row):
                 header_lower = str(header).lower() if header else ""
@@ -109,34 +110,42 @@ class DisaGlobalProvider(BaseProvider):
                     candidate_id_idx = idx
                 elif 'service' in header_lower or 'description' in header_lower:
                     service_desc_idx = idx
+                elif 'date' in header_lower or 'service date' in header_lower:
+                    service_date_idx = idx
                 elif 'cost' in header_lower or 'amount' in header_lower or 'price' in header_lower:
-                    cost_idx = idx
+                    amount_idx = idx
             
             # Extract data rows
             for row in table[1:]:
-                if len(row) < max(filter(None, [candidate_name_idx, candidate_id_idx, service_desc_idx, cost_idx]), default=0):
+                if len(row) < max(filter(None, [candidate_name_idx, candidate_id_idx, service_desc_idx, amount_idx]), default=0):
                     continue
                 
                 try:
                     candidate_name = str(row[candidate_name_idx]).strip() if candidate_name_idx is not None else ""
                     candidate_id = str(row[candidate_id_idx]).strip() if candidate_id_idx is not None else ""
                     service_desc = str(row[service_desc_idx]).strip() if service_desc_idx is not None else ""
-                    cost_str = str(row[cost_idx]).strip() if cost_idx is not None else ""
+                    service_date = str(row[service_date_idx]).strip() if service_date_idx is not None else ""
+                    amount_str = str(row[amount_idx]).strip() if amount_idx is not None else ""
                     
-                    cost_str = re.sub(r'[^\d.]', '', cost_str)
-                    if not cost_str:
+                    amount_str = re.sub(r'[^\d.]', '', amount_str)
+                    if not amount_str:
                         continue
                     
-                    cost = float(cost_str)
+                    amount = float(amount_str)
                     
                     if not candidate_id or not service_desc:
                         continue
                     
+                    # If no service_date found, use empty string (will need to be handled by normalization)
+                    if not service_date:
+                        service_date = ""
+                    
                     line_items.append(ExtractedLineItem(
-                        candidate_name=candidate_name,
+                        service_date=service_date,
                         candidate_id=candidate_id,
-                        service_description=service_desc,
-                        cost=cost
+                        candidate_name=candidate_name,
+                        amount=amount,
+                        service_description=service_desc
                     ))
                 except (ValueError, IndexError):
                     continue
