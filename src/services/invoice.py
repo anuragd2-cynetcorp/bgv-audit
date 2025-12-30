@@ -65,13 +65,15 @@ class InvoiceService(BaseService[Invoice]):
             candidate_name = str(line_item.candidate_name).strip()
             service_date = str(line_item.service_date).strip()
             amount = float(line_item.amount)
-            
+            service_description = str(line_item.service_description).strip()
+
             # Generate fingerprint ID
             fingerprint_id = generate_fingerprint_id(
                 service_date, 
                 candidate_id, 
                 candidate_name, 
-                amount
+                amount,
+                service_description
             )
             
             fingerprint_items.append({
@@ -84,7 +86,7 @@ class InvoiceService(BaseService[Invoice]):
                 'candidate_name': candidate_name,
                 'service_date': service_date,
                 'amount': amount,
-                'service_description': line_item.service_description 
+                'service_description': service_description 
             })
         
         if fingerprint_items:
@@ -124,7 +126,7 @@ class LineItemFingerprintService(BaseService[LineItemFingerprint]):
     def __init__(self):
         super().__init__(LineItemFingerprint)
     
-    def check_historical_duplicate(self, service_date: str, candidate_id: str, patient_name: str, amount: float, current_invoice_id: str) -> Optional[LineItemFingerprint]:
+    def check_historical_duplicate(self, service_date: str, candidate_id: str, patient_name: str, amount: float, service_description: str, current_invoice_id: str) -> Optional[LineItemFingerprint]:
         """
         Check if a line item has been billed before.
         """
@@ -132,7 +134,8 @@ class LineItemFingerprintService(BaseService[LineItemFingerprint]):
             service_date, 
             candidate_id, 
             patient_name, 
-            amount
+            amount,
+            service_description
         )
         
         existing = self.get_by_id(fingerprint_id)

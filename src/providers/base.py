@@ -9,15 +9,15 @@ import PyPDF2
 import pdfplumber
 
 
-def generate_fingerprint_id(date: str, candidate_id: str, name: str, amount: float) -> str:
+def generate_fingerprint_id(date: str, candidate_id: str, name: str, amount: float, service_description: str) -> str:
     """
-    Generates a unique hash based on Date, Patient ID, Name, and Amount.
+    Generates a unique hash based on Date, Patient ID, Name, Amount, and Service Description.
     """
     # Format amount to 2 decimal places to avoid floating point mismatch
     amount_str = "{:.2f}".format(amount)
     
     # Create raw string: "10/31/2025|12345|John Doe|150.00"
-    raw_string = f"{date}|{candidate_id}|{name}|{amount_str}"
+    raw_string = f"{date}|{candidate_id}|{name}|{amount_str}|{service_description}"
     
     # Return MD5 hash
     return hashlib.md5(raw_string.encode('utf-8')).hexdigest()
