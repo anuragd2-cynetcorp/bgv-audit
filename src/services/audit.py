@@ -48,7 +48,6 @@ class AuditService:
     Performs:
     1. Total Mismatch Check
     2. Internal Duplication Check
-    3. Historical Duplication Check
     """
     
     def __init__(self):
@@ -94,9 +93,6 @@ class AuditService:
         
         # 2. Internal Duplication Check
         results.append(self._check_internal_duplicates(extracted))
-        
-        # 3. Historical Duplication Check
-        results.append(self._check_historical_duplicates(extracted, invoice_id))
         
         # Determine overall status
         overall_status = "PASS" if all(r.passed for r in results) else "FAIL"

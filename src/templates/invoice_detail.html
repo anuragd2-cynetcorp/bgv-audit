@@ -106,9 +106,7 @@
                                                                 <th>Candidate ID</th>
                                                                 <th>Service Description</th>
                                                                 <th>Cost</th>
-                                                                {% if result.details.duplicates[0].previously_billed_in %}
-                                                                    <th>Previously Billed In</th>
-                                                                {% elif result.details.duplicates[0].duplicate_of_row %}
+                                                                {% if result.details.duplicates[0].duplicate_of_row %}
                                                                     <th>Duplicate Of Row</th>
                                                                 {% endif %}
                                                             </tr>
@@ -119,10 +117,8 @@
                                                                 <td>{{ dup.row_number }}</td>
                                                                 <td>{{ dup.candidate_id }}</td>
                                                                 <td>{{ dup.service_description }}</td>
-                                                                <td>${{ "%.2f"|format(dup.cost) }}</td>
-                                                                {% if dup.previously_billed_in %}
-                                                                    <td>{{ dup.previously_billed_in }}</td>
-                                                                {% elif dup.duplicate_of_row %}
+                                                                <td>${{ "%.2f"|format(dup.amount) }}</td>
+                                                                {% if dup.duplicate_of_row %}
                                                                     <td>Row {{ dup.duplicate_of_row }}</td>
                                                                 {% endif %}
                                                             </tr>
