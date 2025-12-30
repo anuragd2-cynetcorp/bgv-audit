@@ -12,7 +12,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const submitBtn = document.getElementById('submitBtn');
     const cancelBtn = document.getElementById('cancelBtn');
     const uploadModal = document.getElementById('uploadModal');
-    const modal = bootstrap.Modal.getInstance(uploadModal);
+    // Get or create modal instance - getInstance returns null if modal hasn't been initialized
+    const modal = uploadModal ? (bootstrap.Modal.getInstance(uploadModal) || new bootstrap.Modal(uploadModal)) : null;
     
     // Get upload URL from form data attribute
     const uploadUrl = uploadForm.getAttribute('data-upload-url');
