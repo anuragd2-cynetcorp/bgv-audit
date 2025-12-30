@@ -64,17 +64,17 @@ document.addEventListener('DOMContentLoaded', function() {
             return response.json();
         })
         .then(data => {
-            // Hide full-page loader
-            if (fullPageLoader) {
-                fullPageLoader.classList.add('d-none');
-            }
-            
             if (data.success) {
                 // Redirect to invoice detail page
+                // Keep loader visible during redirect to prevent flash of content
                 if (data.redirect_url) {
                     window.location.href = data.redirect_url;
                 } else {
                     // If no redirect URL, reload the page
+                    // Hide loader before reload since we're staying on same page
+                    if (fullPageLoader) {
+                        fullPageLoader.classList.add('d-none');
+                    }
                     window.location.reload();
                 }
             } else {
