@@ -55,7 +55,7 @@ class ExtractedLineItem:
     @property
     def fingerprint(self) -> str:
         """Generate a unique fingerprint for duplicate detection."""
-        return generate_fingerprint_id(self.service_date, self.candidate_id, self.candidate_name, self.amount)
+        return generate_fingerprint_id(self.service_date, self.candidate_id, self.candidate_name, self.amount, self.service_description)
 
 class ExtractedInvoice:
     """Represents extracted data from an invoice."""
