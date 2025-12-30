@@ -5,8 +5,11 @@ from src.services.invoice import InvoiceService
 from src.services.audit import AuditService
 from src.providers.enum import Provider
 from src.helpers import get_provider_instance
+from src.logger import get_logger
 import os
 import tempfile
+
+logger = get_logger()
 
 main_bp = Blueprint('main', __name__)
 
@@ -35,7 +38,7 @@ def dashboard():
         if invoices is None:
             invoices = []
     except Exception as e:
-        print(f"Error fetching invoices: {e}")
+        logger.error(f"Error fetching invoices: {e}", exc_info=True)
         invoices = []
     
     # Get list of all available providers from enum
@@ -135,11 +138,13 @@ def upload_invoice():
         }), 200
     
     except ValueError as e:
+        logger.error(f"ValueError in upload_invoice: {str(e)}", exc_info=True)
         return jsonify({
             'success': False,
             'message': f'Processing error: {str(e)}'
         }), 400
     except Exception as e:
+        logger.error(f"Unexpected error in upload_invoice: {str(e)}", exc_info=True)
         return jsonify({
             'success': False,
             'message': f'Unexpected error: {str(e)}'

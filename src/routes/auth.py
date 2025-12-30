@@ -1,9 +1,11 @@
-from flask import Blueprint, redirect, url_for, session, flash, current_app
+from flask import Blueprint, redirect, url_for, session, flash
 from src.extensions import oauth
 from src.services.user import UserService
+from src.logger import get_logger
 
 auth_bp = Blueprint('auth', __name__)
 user_service = UserService()
+logger = get_logger()
 
 @auth_bp.route('/login')
 def login():
@@ -37,7 +39,7 @@ def auth_callback():
         return redirect(url_for('main.dashboard'))
     
     except Exception as e:
-        current_app.logger.error(f"Auth Error: {e}")
+        logger.error(f"Auth Error: {e}", exc_info=True)
         flash("Authentication failed.", "danger")
         return redirect(url_for('main.index'))
 

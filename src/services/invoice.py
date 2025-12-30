@@ -5,6 +5,9 @@ from typing import Dict, List, Optional
 from src.models import Invoice, LineItemFingerprint
 from src.services.base import BaseService
 from src.providers.base import ExtractedInvoice, generate_fingerprint_id
+from src.logger import get_logger
+
+logger = get_logger()
 
 
 class InvoiceService(BaseService[Invoice]):
@@ -58,7 +61,7 @@ class InvoiceService(BaseService[Invoice]):
         
         for line_item in extracted.line_items:
             if not line_item.candidate_id or not line_item.service_date:
-                print(f"Warning: Skipping line item missing ID or Date. ID: {line_item.candidate_id}")
+                logger.warning(f"Skipping line item missing ID or Date. ID: {line_item.candidate_id}")
                 continue
             
             candidate_id = str(line_item.candidate_id).strip()

@@ -1,15 +1,21 @@
 import os
-from flask import Flask
+import traceback
+from flask import Flask, jsonify, render_template, request
 from src.config import Config
 from src.extensions import oauth
+from src.logger import get_logger
 
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
+    # Initialize logger singleton
+    logger = get_logger()
+    logger.info("Flask application initialized")
+
     # 1. Initialize FireO
     if not os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
-        print("WARNING: GOOGLE_APPLICATION_CREDENTIALS not set.")
+        logger.warning("WARNING: GOOGLE_APPLICATION_CREDENTIALS not set.")
 
     # 2. Initialize Extensions
     oauth.init_app(app)
@@ -27,6 +33,43 @@ def create_app():
     
     app.register_blueprint(main_bp)
     app.register_blueprint(auth_bp)
+
+    # 4. Request logging (for debugging)
+    @app.before_request
+    def log_request_info():
+        """Log request information for debugging."""
+        logger.info(f"Request: {request.method} {request.path}")
+        if request.form:
+            logger.debug(f"Form data: {dict(request.form)}")
+
+    # 5. Global Error Handlers
+    @app.errorhandler(500)
+    def internal_error(error):
+        """Handle 500 Internal Server Errors."""
+        error_traceback = traceback.format_exc()
+        error_message = str(error)
+        
+        # Log error with traceback
+        logger.error(f"500 Error: {error_message}")
+        logger.exception("Full traceback:")
+        
+        # If it's an AJAX request, return JSON
+        if request.is_json or request.path.startswith('/upload'):
+            return jsonify({
+                'success': False,
+                'message': 'An internal server error occurred. Please try again later.'
+            }), 500
+        
+        # Otherwise, return HTML error page
+        return render_template('error.html', error_code=500, error_message='Internal Server Error'), 500
+    
+    @app.errorhandler(404)
+    def not_found(error):
+        """Handle 404 Not Found errors."""
+        logger.warning(f"404 Error: {request.path}")
+        if request.is_json:
+            return jsonify({'success': False, 'message': 'Resource not found'}), 404
+        return render_template('error.html', error_code=404, error_message='Page Not Found'), 404
 
     return app
 
