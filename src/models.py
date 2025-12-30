@@ -68,12 +68,14 @@ class LineItemFingerprint(BaseModel):
     candidate_id = TextField(required=True)
     candidate_name = TextField(required=True)
     service_date = TextField(required=True)  # Stores "Date of Collection" or "Check Date"
-    cost = NumberField(required=True)
-    
+    amount = NumberField(required=True)
+    service_description = TextField(required=True)
+
     # Context Fields
     invoice_id = TextField(required=True)
+    invoice_number = TextField(required=True)
     provider_name = TextField(required=True)
-    
+
     # Optional: Store the extra data as a Map/JSON if needed for debugging
     metadata = MapField() 
 

@@ -4,8 +4,23 @@ All provider-specific extractors must inherit from this class.
 """
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional
+import hashlib
 import PyPDF2
 import pdfplumber
+
+
+def generate_fingerprint_id(date: str, candidate_id: str, name: str, amount: float) -> str:
+    """
+    Generates a unique hash based on Date, Patient ID, Name, and Amount.
+    """
+    # Format amount to 2 decimal places to avoid floating point mismatch
+    amount_str = "{:.2f}".format(amount)
+    
+    # Create raw string: "10/31/2025|12345|John Doe|150.00"
+    raw_string = f"{date}|{candidate_id}|{name}|{amount_str}"
+    
+    # Return MD5 hash
+    return hashlib.md5(raw_string.encode('utf-8')).hexdigest()
 
 
 class ExtractedLineItem:
@@ -36,11 +51,11 @@ class ExtractedLineItem:
             'service_description': self.service_description,
             'metadata': self.metadata
         }
-    
+
+    @property
     def fingerprint(self) -> str:
         """Generate a unique fingerprint for duplicate detection."""
-        return f"{self.service_date}|{self.candidate_id}|{self.candidate_name}|{self.amount:.2f}"
-
+        return generate_fingerprint_id(self.service_date, self.candidate_id, self.candidate_name, self.amount)
 
 class ExtractedInvoice:
     """Represents extracted data from an invoice."""

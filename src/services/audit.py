@@ -2,10 +2,9 @@
 Service for auditing invoices and detecting discrepancies.
 """
 from typing import Dict, List
-from src.helpers import generate_fingerprint_id
 from src.models import Invoice
 from src.services.invoice import InvoiceService, LineItemFingerprintService
-from src.providers.base import BaseProvider
+from src.providers.base import BaseProvider, generate_fingerprint_id
 
 
 class AuditResult:
@@ -122,7 +121,7 @@ class AuditService:
         Returns:
             AuditResult
         """
-        calculated_total = sum(item.cost for item in extracted.line_items)
+        calculated_total = sum(item.amount for item in extracted.line_items)
         difference = abs(calculated_total - extracted.grand_total)
         
         if difference <= self.rounding_tolerance:
@@ -158,14 +157,14 @@ class AuditService:
         duplicates = []
         
         for idx, item in enumerate(extracted.line_items):
-            fingerprint = item.fingerprint()
+            fingerprint = item.fingerprint
             if fingerprint in fingerprints:
                 # Found duplicate
                 duplicates.append({
                     'row_number': idx + 1,
                     'candidate_id': item.candidate_id,
                     'service_description': item.service_description,
-                    'cost': item.cost,
+                    'amount': item.amount,
                     'duplicate_of_row': fingerprints[fingerprint] + 1
                 })
             else:
@@ -204,8 +203,8 @@ class AuditService:
         
         for idx, item in enumerate(extracted.line_items):
             # Use centralized fingerprint ID generation (consistent with invoice_service)
-            fingerprint_id = generate_fingerprint_id(item.candidate_id, item.service_description)
-            existing = self.fingerprint_service.get_by_id(fingerprint_id)
+            fingerprint = item.fingerprint
+            existing = self.fingerprint_service.get_by_id(fingerprint)
             
             duplicate = None
             if existing and existing.invoice_id != invoice_id:
@@ -216,7 +215,7 @@ class AuditService:
                     'row_number': idx + 1,
                     'candidate_id': item.candidate_id,
                     'service_description': item.service_description,
-                    'cost': item.cost,
+                    'amount': item.amount,
                     'previously_billed_in': duplicate.invoice_number,
                     'previous_invoice_date': duplicate.processed_date.isoformat() if duplicate.processed_date else None
                 })

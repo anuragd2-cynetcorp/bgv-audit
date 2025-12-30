@@ -92,15 +92,3 @@ def generate_safe_id(raw_string: str) -> str:
     return hashlib.md5(raw_string.encode('utf-8')).hexdigest()
 
 
-def generate_fingerprint_id(date: str, candidate_id: str, name: str, amount: float) -> str:
-    """
-    Generates a unique hash based on Date, Patient ID, Name, and Amount.
-    """
-    # Format amount to 2 decimal places to avoid floating point mismatch
-    amount_str = "{:.2f}".format(amount)
-    
-    # Create raw string: "10/31/2025|12345|John Doe|150.00"
-    raw_string = f"{date}|{candidate_id}|{name}|{amount_str}"
-    
-    # Return MD5 hash
-    return hashlib.md5(raw_string.encode('utf-8')).hexdigest()

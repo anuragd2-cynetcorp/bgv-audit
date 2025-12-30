@@ -116,7 +116,7 @@ def upload_invoice():
         
         # Perform audit
         audit_service = AuditService()
-        audit_report = audit_service.audit_invoice(invoice.invoice_number, temp_path, provider)
+        audit_report = audit_service.audit_invoice(invoice.id, temp_path, provider)
         
         # Clean up temp file
         try:

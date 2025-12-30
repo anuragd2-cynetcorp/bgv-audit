@@ -2,10 +2,9 @@
 Service for invoice processing and management.
 """
 from typing import Dict, List, Optional
-from src.helpers import generate_fingerprint_id
 from src.models import Invoice, LineItemFingerprint
 from src.services.base import BaseService
-from src.providers.base import BaseProvider, ExtractedInvoice, ExtractedLineItem
+from src.providers.base import BaseProvider, ExtractedInvoice, ExtractedLineItem, generate_fingerprint_id
 
 
 class InvoiceService(BaseService[Invoice]):
@@ -53,7 +52,7 @@ class InvoiceService(BaseService[Invoice]):
     
     def _store_fingerprints(self, invoice_id: str, extracted: ExtractedInvoice):
         """
-        Store fingerprints based on Date, ID, Name, and Amount.
+        Store fingerprints based on Service Date, ID, Name, and Amount.
         """
         fingerprint_service = LineItemFingerprintService()
         
@@ -61,44 +60,36 @@ class InvoiceService(BaseService[Invoice]):
         fingerprint_items = []
         
         for line_item in extracted.line_items:
-            # Validate required fields based on NEW requirements
-            if not line_item.candidate_id or not line_item.date_of_collection:
+            if not line_item.candidate_id or not line_item.service_date:
                 print(f"Warning: Skipping line item missing ID or Date. ID: {line_item.candidate_id}")
                 continue
             
-            # Clean data
             candidate_id = str(line_item.candidate_id).strip()
-            patient_name = str(line_item.candidate_name).strip()
-            date_of_collection = str(line_item.date_of_collection).strip()
-            amount = line_item.cost # Float
+            candidate_name = str(line_item.candidate_name).strip()
+            service_date = str(line_item.service_date).strip()
+            amount = float(line_item.amount)
             
-            # Generate fingerprint ID using NEW criteria
-            # (Date + ID + Name + Amount)
+            # Generate fingerprint ID
             fingerprint_id = generate_fingerprint_id(
-                date_of_collection, 
+                service_date, 
                 candidate_id, 
-                patient_name, 
+                candidate_name, 
                 amount
             )
             
-            # Prepare item for bulk operation
             fingerprint_items.append({
                 'doc_id': fingerprint_id,
                 'invoice_id': invoice_id,
                 'invoice_number': extracted.invoice_number,
                 'provider_name': extracted.provider_name,
-                
-                # Store the fields we care about
+                'metadata': line_item.metadata,
                 'candidate_id': candidate_id,
-                'patient_name': patient_name,
-                'date_of_collection': date_of_collection,
-                'cost': amount,
-                
-                # We can leave service_description empty or store it for reference only
+                'candidate_name': candidate_name,
+                'service_date': service_date,
+                'amount': amount,
                 'service_description': line_item.service_description 
             })
         
-        # Bulk create or update
         if fingerprint_items:
             fingerprint_service.bulk_create_or_update(fingerprint_items, skip_existence_check=False)
     
@@ -136,13 +127,12 @@ class LineItemFingerprintService(BaseService[LineItemFingerprint]):
     def __init__(self):
         super().__init__(LineItemFingerprint)
     
-    def check_historical_duplicate(self, date_of_collection: str, candidate_id: str, patient_name: str, amount: float, current_invoice_id: str) -> Optional[LineItemFingerprint]:
+    def check_historical_duplicate(self, service_date: str, candidate_id: str, patient_name: str, amount: float, current_invoice_id: str) -> Optional[LineItemFingerprint]:
         """
-        Check if a line item has been billed before based on Date, ID, Name, and Amount.
+        Check if a line item has been billed before.
         """
-        # Generate ID using the exact same logic as storage
         fingerprint_id = generate_fingerprint_id(
-            date_of_collection, 
+            service_date, 
             candidate_id, 
             patient_name, 
             amount
