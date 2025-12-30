@@ -116,8 +116,8 @@ class EScreenProvider(BaseProvider):
                         # Determine ID (SSN or Chain ID)
                         final_id = ssn
                         if ssn == "0000":
-                            final_id = chain_id 
-                        print(f"Date: {date_str}, Candidate Name: {candidate_name}, Description: {description}, Amount: {amount}, Final ID: {final_id}")
+                            final_id = chain_id
+                        
                         item = ExtractedLineItem(
                             service_date=date_str,
                             candidate_id=final_id, 
