@@ -17,29 +17,33 @@
                 <h5 class="mb-0">Invoice Information</h5>
             </div>
             <div class="card-body">
-                <table class="table table-borderless mb-0">
+                <table class="table table-borderless mb-0" style="table-layout: fixed; width: 100%;">
+                    <colgroup>
+                        <col style="width: 40%;">
+                        <col style="width: 60%;">
+                    </colgroup>
                     <tr>
-                        <td><strong>Invoice Number:</strong></td>
-                        <td>{{ invoice.invoice_number }}</td>
+                        <td class="text-nowrap"><strong>Invoice Number:</strong></td>
+                        <td class="text-break" style="word-break: break-all; overflow-wrap: break-word;">{{ invoice.invoice_number }}</td>
                     </tr>
                     <tr>
-                        <td><strong>Provider:</strong></td>
-                        <td>{{ invoice.provider_name }}</td>
+                        <td class="text-nowrap"><strong>Provider:</strong></td>
+                        <td class="text-break">{{ invoice.provider_name }}</td>
                     </tr>
                     <tr>
-                        <td><strong>Filename:</strong></td>
-                        <td>{{ invoice.filename }}</td>
+                        <td class="text-nowrap"><strong>Filename:</strong></td>
+                        <td class="text-break" style="word-break: break-all; overflow-wrap: break-word;">{{ invoice.filename }}</td>
                     </tr>
                     <tr>
-                        <td><strong>Grand Total:</strong></td>
+                        <td class="text-nowrap"><strong>Grand Total:</strong></td>
                         <td><strong class="text-primary">${{ "%.2f"|format(invoice.grand_total) }}</strong></td>
                     </tr>
                     <tr>
-                        <td><strong>Upload Date:</strong></td>
+                        <td class="text-nowrap"><strong>Upload Date:</strong></td>
                         <td>{{ invoice.upload_date.strftime('%Y-%m-%d %H:%M:%S') if invoice.upload_date else 'N/A' }}</td>
                     </tr>
                     <tr>
-                        <td><strong>Status:</strong></td>
+                        <td class="text-nowrap"><strong>Status:</strong></td>
                         <td>
                             {% if invoice.audit_status == 'PASS' %}
                                 <span class="badge bg-success fs-6">PASS</span>
