@@ -178,3 +178,12 @@ class FirstAdvantageProvider(BaseProvider):
             line_items=line_items,
             grand_total=grand_total
         )
+    
+    def _extract_from_tables(self, tables: List[List[List[str]]]) -> List[ExtractedLineItem]:
+        """Extract line items from PDF tables."""
+        # TODO: Implement based on First Advantage's format
+        return []
+    
+    def _extract_from_text(self, text: str) -> List[ExtractedLineItem]:
+        """Extract line items from text."""
+        return []
