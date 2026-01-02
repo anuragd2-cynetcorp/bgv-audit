@@ -34,17 +34,16 @@ class InvoiceService(BaseService[Invoice]):
             ValueError: If processing fails
         """
         
-        # Append user_id and timestamp to invoice number for uniqueness
-        invoice_number_with_user_and_timestamp = append_timestamp_to_invoice_number(
-            extracted.invoice_number,
-            uploaded_by
+        # Append timestamp to invoice number for uniqueness
+        invoice_number_with_timestamp = append_timestamp_to_invoice_number(
+            extracted.invoice_number
         )
         
         # Create invoice document
         invoice = self.create_or_update(
-            doc_id=invoice_number_with_user_and_timestamp,
+            doc_id=invoice_number_with_timestamp,
             filename=filename,
-            invoice_number=invoice_number_with_user_and_timestamp,
+            invoice_number=invoice_number_with_timestamp,
             provider_name=extracted.provider_name,
             grand_total=extracted.grand_total,
             uploaded_by=uploaded_by,

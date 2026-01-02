@@ -24,25 +24,28 @@ def generate_fingerprint_id(date: str, candidate_id: str, name: str, amount: flo
     return hashlib.md5(raw_string.encode('utf-8')).hexdigest()
 
 
-def append_timestamp_to_invoice_number(invoice_number: str, user_id: str) -> str:
+def append_timestamp_to_invoice_number(invoice_number: str) -> str:
     """
-    Append user_id and timestamp to an invoice number to ensure uniqueness.
-    Format: <invoice_number>_<user_id>_YYYYMMDDHHMMSSmicroseconds
+    Append timestamp to an invoice number to ensure uniqueness.
+    Format: <invoice_number>_YYYYMMDDHHMMSSmicroseconds
+    If invoice_number is "__", result will be: __YYYYMMDDHHMMSSmicroseconds (no extra underscore)
     
     Args:
-        invoice_number: The invoice number (can be "UNKNOWN" or actual number)
-        user_id: The user's email/ID
+        invoice_number: The invoice number (can be "__" for unknown or actual number)
         
     Returns:
-        Invoice number with user_id and timestamp appended
+        Invoice number with timestamp appended
     """
     now = datetime.now()
     timestamp = now.strftime("%Y%m%d%H%M%S")
     microseconds = now.microsecond
     timestamp_suffix = f"{timestamp}{microseconds:06d}"
-    # Sanitize user_id to remove any characters that might cause issues (like @, .)
-    sanitized_user_id = user_id.replace('@', '_at_').replace('.', '_')
-    return f"{invoice_number}_{sanitized_user_id}_{timestamp_suffix}"
+    
+    # If invoice_number is "__" (unknown), don't add extra underscore
+    if invoice_number == "__":
+        return f"__{timestamp_suffix}"
+    else:
+        return f"{invoice_number}_{timestamp_suffix}"
 
 
 class ExtractedLineItem:
@@ -120,12 +123,13 @@ class BaseProvider(ABC):
     def generate_unknown_invoice_number() -> str:
         """
         Generate invoice number placeholder when invoice ID is not found.
-        The user_id and timestamp will be automatically appended in process_invoice
+        The timestamp will be automatically appended in process_invoice.
+        Result will be: __YYYYMMDDHHMMSSmicroseconds (double underscore)
         
         Returns:
-            "_" string (user_id and timestamp will be added centrally)
+            "__" string (timestamp will be added centrally)
         """
-        return "_"
+        return "__"
     
     @abstractmethod
     def identify(self, pdf_path: str) -> bool:
