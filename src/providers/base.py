@@ -4,6 +4,7 @@ All provider-specific extractors must inherit from this class.
 """
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional
+from datetime import datetime
 import hashlib
 import PyPDF2
 import pdfplumber
@@ -92,6 +93,20 @@ class BaseProvider(ABC):
             name: Human-readable name of the provider
         """
         self.name = name
+    
+    @staticmethod
+    def generate_unknown_invoice_number() -> str:
+        """
+        Generate a unique timestamp-based invoice number when invoice ID is not found.
+        Format: UNKNOWN_YYYYMMDD_HHMMSS_microseconds
+        
+        Returns:
+            Unique invoice number string based on current timestamp
+        """
+        now = datetime.now()
+        timestamp = now.strftime("%Y%m%d_%H%M%S")
+        microseconds = now.microsecond
+        return f"UNKNOWN_{timestamp}_{microseconds:06d}"
     
     @abstractmethod
     def identify(self, pdf_path: str) -> bool:

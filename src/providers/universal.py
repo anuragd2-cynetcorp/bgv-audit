@@ -35,7 +35,7 @@ class UniversalProvider(BaseProvider):
         """
         Extract invoice data from Universal's PDF format using a State Machine.
         """
-        invoice_number = "UNKNOWN" # Universal invoices in this format often lack a top-level invoice #
+        invoice_number = BaseProvider.generate_unknown_invoice_number()  # Universal invoices in this format often lack a top-level invoice #
         grand_total = 0.0
         line_items = []
         

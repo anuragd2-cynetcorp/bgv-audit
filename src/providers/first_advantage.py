@@ -34,7 +34,7 @@ class FirstAdvantageProvider(BaseProvider):
         tables = self._get_pdf_tables(pdf_path)
         
         invoice_number_match = re.search(r'Invoice\s*[#:]?\s*([A-Z0-9\-]+)', text, re.IGNORECASE)
-        invoice_number = invoice_number_match.group(1) if invoice_number_match else "UNKNOWN"
+        invoice_number = invoice_number_match.group(1) if invoice_number_match else BaseProvider.generate_unknown_invoice_number()
         
         total_patterns = [
             r'Grand\s*Total[:\s]*\$?([\d,]+\.?\d*)',

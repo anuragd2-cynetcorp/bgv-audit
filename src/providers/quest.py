@@ -50,7 +50,7 @@ class QuestProvider(BaseProvider):
         Raises:
             ValueError: If critical information (Total, Line Items) cannot be found.
         """
-        invoice_number = "UNKNOWN"
+        invoice_number = BaseProvider.generate_unknown_invoice_number()
         grand_total = 0.0
         line_items = []
         
