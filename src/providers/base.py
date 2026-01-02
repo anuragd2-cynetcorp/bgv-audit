@@ -116,16 +116,13 @@ class BaseProvider(ABC):
     @staticmethod
     def generate_unknown_invoice_number() -> str:
         """
-        Generate a unique timestamp-based invoice number when invoice ID is not found.
-        Format: UNKNOWN_YYYYMMDD_HHMMSS_microseconds
+        Generate invoice number placeholder when invoice ID is not found.
+        The timestamp will be automatically appended by ExtractedInvoice.__init__
         
         Returns:
-            Unique invoice number string based on current timestamp
+            "UNKNOWN" string (timestamp will be added centrally)
         """
-        now = datetime.now()
-        timestamp = now.strftime("%Y%m%d_%H%M%S")
-        microseconds = now.microsecond
-        return f"UNKNOWN_{timestamp}_{microseconds:06d}"
+        return "UNKNOWN"
     
     @abstractmethod
     def identify(self, pdf_path: str) -> bool:
