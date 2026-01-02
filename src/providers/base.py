@@ -24,6 +24,24 @@ def generate_fingerprint_id(date: str, candidate_id: str, name: str, amount: flo
     return hashlib.md5(raw_string.encode('utf-8')).hexdigest()
 
 
+def append_timestamp_to_invoice_number(invoice_number: str) -> str:
+    """
+    Append a timestamp to an invoice number to ensure uniqueness.
+    Format: <invoice_number>_YYYYMMDD_HHMMSS_microseconds
+    
+    Args:
+        invoice_number: The invoice number (can be "UNKNOWN" or actual number)
+        
+    Returns:
+        Invoice number with timestamp appended
+    """
+    now = datetime.now()
+    timestamp = now.strftime("%Y%m%d_%H%M%S")
+    microseconds = now.microsecond
+    timestamp_suffix = f"{timestamp}_{microseconds:06d}"
+    return f"{invoice_number}_{timestamp_suffix}"
+
+
 class ExtractedLineItem:
     """Represents a single line item extracted from an invoice."""
     def __init__(
@@ -61,7 +79,8 @@ class ExtractedLineItem:
 class ExtractedInvoice:
     """Represents extracted data from an invoice."""
     def __init__(self, invoice_number: str, provider_name: str, line_items: List[ExtractedLineItem], grand_total: float):
-        self.invoice_number = invoice_number
+        # Automatically append timestamp to invoice number for uniqueness
+        self.invoice_number = append_timestamp_to_invoice_number(invoice_number)
         self.provider_name = provider_name
         self.line_items = line_items
         self.grand_total = grand_total
