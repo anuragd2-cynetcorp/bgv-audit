@@ -24,22 +24,25 @@ def generate_fingerprint_id(date: str, candidate_id: str, name: str, amount: flo
     return hashlib.md5(raw_string.encode('utf-8')).hexdigest()
 
 
-def append_timestamp_to_invoice_number(invoice_number: str) -> str:
+def append_timestamp_to_invoice_number(invoice_number: str, user_id: str) -> str:
     """
-    Append a timestamp to an invoice number to ensure uniqueness.
-    Format: <invoice_number>_YYYYMMDDHHMMSSmicroseconds
+    Append user_id and timestamp to an invoice number to ensure uniqueness.
+    Format: <invoice_number>_<user_id>_YYYYMMDDHHMMSSmicroseconds
     
     Args:
         invoice_number: The invoice number (can be "UNKNOWN" or actual number)
+        user_id: The user's email/ID
         
     Returns:
-        Invoice number with timestamp appended
+        Invoice number with user_id and timestamp appended
     """
     now = datetime.now()
     timestamp = now.strftime("%Y%m%d%H%M%S")
     microseconds = now.microsecond
     timestamp_suffix = f"{timestamp}{microseconds:06d}"
-    return f"{invoice_number}_{timestamp_suffix}"
+    # Sanitize user_id to remove any characters that might cause issues (like @, .)
+    sanitized_user_id = user_id.replace('@', '_at_').replace('.', '_')
+    return f"{invoice_number}_{sanitized_user_id}_{timestamp_suffix}"
 
 
 class ExtractedLineItem:
@@ -79,8 +82,8 @@ class ExtractedLineItem:
 class ExtractedInvoice:
     """Represents extracted data from an invoice."""
     def __init__(self, invoice_number: str, provider_name: str, line_items: List[ExtractedLineItem], grand_total: float):
-        # Automatically append timestamp to invoice number for uniqueness
-        self.invoice_number = append_timestamp_to_invoice_number(invoice_number)
+        # Store raw invoice number (timestamp and user_id will be added in process_invoice)
+        self.invoice_number = invoice_number
         self.provider_name = provider_name
         self.line_items = line_items
         self.grand_total = grand_total
@@ -117,12 +120,12 @@ class BaseProvider(ABC):
     def generate_unknown_invoice_number() -> str:
         """
         Generate invoice number placeholder when invoice ID is not found.
-        The timestamp will be automatically appended by ExtractedInvoice.__init__
+        The user_id and timestamp will be automatically appended in process_invoice
         
         Returns:
-            "UNKNOWN" string (timestamp will be added centrally)
+            "_" string (user_id and timestamp will be added centrally)
         """
-        return "UNKNOWN"
+        return "_"
     
     @abstractmethod
     def identify(self, pdf_path: str) -> bool:

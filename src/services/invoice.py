@@ -4,7 +4,7 @@ Service for invoice processing and management.
 from typing import Dict, List, Optional
 from src.models import Invoice
 from src.services.base import BaseService
-from src.providers.base import ExtractedInvoice
+from src.providers.base import ExtractedInvoice, append_timestamp_to_invoice_number
 from src.logger import get_logger
 
 logger = get_logger()
@@ -34,11 +34,17 @@ class InvoiceService(BaseService[Invoice]):
             ValueError: If processing fails
         """
         
+        # Append user_id and timestamp to invoice number for uniqueness
+        invoice_number_with_user_and_timestamp = append_timestamp_to_invoice_number(
+            extracted.invoice_number,
+            uploaded_by
+        )
+        
         # Create invoice document
         invoice = self.create_or_update(
-            doc_id=extracted.invoice_number,
+            doc_id=invoice_number_with_user_and_timestamp,
             filename=filename,
-            invoice_number=extracted.invoice_number,
+            invoice_number=invoice_number_with_user_and_timestamp,
             provider_name=extracted.provider_name,
             grand_total=extracted.grand_total,
             uploaded_by=uploaded_by,
