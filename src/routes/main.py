@@ -34,9 +34,11 @@ def dashboard():
     
     try:
         invoices = invoice_service.list_invoices_by_user(user_email)
-        # Ensure invoices is a list, not None
+        # Convert QueryIterator to list to allow iteration and length checking in template
         if invoices is None:
             invoices = []
+        else:
+            invoices = list(invoices)
     except Exception as e:
         logger.error(f"Error fetching invoices: {e}", exc_info=True)
         invoices = []
