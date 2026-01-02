@@ -3,7 +3,7 @@ Service for auditing invoices and detecting discrepancies.
 """
 from typing import Dict, List
 from src.models import Invoice
-from src.services.invoice import InvoiceService, LineItemFingerprintService
+from src.services.invoice import InvoiceService
 from src.providers.base import ExtractedInvoice
 
 
@@ -52,7 +52,6 @@ class AuditService:
     
     def __init__(self):
         self.invoice_service = InvoiceService()
-        self.fingerprint_service = LineItemFingerprintService()
         self.rounding_tolerance = 0.01  # $0.01 tolerance for rounding differences
     
     def audit_invoice(self, invoice_id: str, extracted: ExtractedInvoice) -> AuditReport:
@@ -181,53 +180,3 @@ class AuditService:
                 }
             )
     
-    def _check_historical_duplicates(self, extracted, invoice_id: str) -> AuditResult:
-        """
-        Check if line items have been billed in previous invoices.
-        
-        Args:
-            extracted: ExtractedInvoice object
-            invoice_id: Current invoice ID
-            
-        Returns:
-            AuditResult
-        """
-        historical_duplicates = []
-        
-        for idx, item in enumerate(extracted.line_items):
-            # Use centralized fingerprint ID generation (consistent with invoice_service)
-            fingerprint = item.fingerprint
-            existing = self.fingerprint_service.get_by_id(fingerprint)
-            
-            duplicate = None
-            if existing and existing.invoice_id != invoice_id:
-                duplicate = existing
-            
-            if duplicate:
-                historical_duplicates.append({
-                    'row_number': idx + 1,
-                    'candidate_id': item.candidate_id,
-                    'service_description': item.service_description,
-                    'amount': item.amount,
-                    'previously_billed_in': duplicate.invoice_number,
-                    'previous_invoice_date': duplicate.processed_date.isoformat() if duplicate.processed_date else None
-                })
-        
-        if not historical_duplicates:
-            return AuditResult(
-                check_name="Historical Duplication Check",
-                passed=True,
-                message="No historical duplicates found",
-                details={'duplicate_count': 0}
-            )
-        else:
-            return AuditResult(
-                check_name="Historical Duplication Check",
-                passed=False,
-                message=f"Found {len(historical_duplicates)} historical duplicate(s)",
-                details={
-                    'duplicate_count': len(historical_duplicates),
-                    'duplicates': historical_duplicates
-                }
-            )
-

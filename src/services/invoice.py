@@ -2,9 +2,9 @@
 Service for invoice processing and management.
 """
 from typing import Dict, List, Optional
-from src.models import Invoice, LineItemFingerprint
+from src.models import Invoice
 from src.services.base import BaseService
-from src.providers.base import ExtractedInvoice, generate_fingerprint_id
+from src.providers.base import ExtractedInvoice
 from src.logger import get_logger
 
 logger = get_logger()
@@ -45,55 +45,7 @@ class InvoiceService(BaseService[Invoice]):
             audit_status="PENDING"
         )
         
-        # Store line item fingerprints for duplicate detection
-        self._store_fingerprints(invoice.id, extracted)
-        
         return invoice
-    
-    def _store_fingerprints(self, invoice_id: str, extracted: ExtractedInvoice):
-        """
-        Store fingerprints based on Service Date, ID, Name, and Amount.
-        """
-        fingerprint_service = LineItemFingerprintService()
-        
-        # Prepare bulk items list
-        fingerprint_items = []
-        
-        for line_item in extracted.line_items:
-            if not line_item.candidate_id or not line_item.service_date:
-                logger.warning(f"Skipping line item missing ID or Date. ID: {line_item.candidate_id}")
-                continue
-            
-            candidate_id = str(line_item.candidate_id).strip()
-            candidate_name = str(line_item.candidate_name).strip()
-            service_date = str(line_item.service_date).strip()
-            amount = float(line_item.amount)
-            service_description = str(line_item.service_description).strip()
-
-            # Generate fingerprint ID
-            fingerprint_id = generate_fingerprint_id(
-                service_date, 
-                candidate_id, 
-                candidate_name, 
-                amount,
-                service_description
-            )
-            
-            fingerprint_items.append({
-                'doc_id': fingerprint_id,
-                'invoice_id': invoice_id,
-                'invoice_number': extracted.invoice_number,
-                'provider_name': extracted.provider_name,
-                'metadata': line_item.metadata,
-                'candidate_id': candidate_id,
-                'candidate_name': candidate_name,
-                'service_date': service_date,
-                'amount': amount,
-                'service_description': service_description 
-            })
-        
-        if fingerprint_items:
-            fingerprint_service.bulk_create_or_update(fingerprint_items, skip_existence_check=False)
     
     def get_invoice_by_number(self, invoice_number: str) -> Optional[Invoice]:
         """
@@ -119,44 +71,4 @@ class InvoiceService(BaseService[Invoice]):
         """
         # FireO query example - adjust based on your FireO version
         return Invoice.db().filter('uploaded_by', '==', user_email).fetch()
-
-
-class LineItemFingerprintService(BaseService[LineItemFingerprint]):
-    """
-    Service for managing line item fingerprints.
-    """
-    
-    def __init__(self):
-        super().__init__(LineItemFingerprint)
-    
-    def check_historical_duplicate(self, service_date: str, candidate_id: str, patient_name: str, amount: float, service_description: str, current_invoice_id: str) -> Optional[LineItemFingerprint]:
-        """
-        Check if a line item has been billed before.
-        """
-        fingerprint_id = generate_fingerprint_id(
-            service_date, 
-            candidate_id, 
-            patient_name, 
-            amount,
-            service_description
-        )
-        
-        existing = self.get_by_id(fingerprint_id)
-        
-        if existing and existing.invoice_id != current_invoice_id:
-            return existing
-        
-        return None
-    
-    def get_fingerprints_by_invoice(self, invoice_id: str) -> List[LineItemFingerprint]:
-        """
-        Get all fingerprints for a specific invoice.
-        
-        Args:
-            invoice_id: Invoice document ID
-            
-        Returns:
-            List of LineItemFingerprint instances
-        """
-        return LineItemFingerprint.collection.filter('invoice_id', '==', invoice_id).fetch()
 
