@@ -27,7 +27,7 @@ def generate_fingerprint_id(date: str, candidate_id: str, name: str, amount: flo
 def append_timestamp_to_invoice_number(invoice_number: str) -> str:
     """
     Append a timestamp to an invoice number to ensure uniqueness.
-    Format: <invoice_number>_YYYYMMDD_HHMMSS_microseconds
+    Format: <invoice_number>_YYYYMMDDHHMMSSmicroseconds
     
     Args:
         invoice_number: The invoice number (can be "UNKNOWN" or actual number)
@@ -36,9 +36,9 @@ def append_timestamp_to_invoice_number(invoice_number: str) -> str:
         Invoice number with timestamp appended
     """
     now = datetime.now()
-    timestamp = now.strftime("%Y%m%d_%H%M%S")
+    timestamp = now.strftime("%Y%m%d%H%M%S")
     microseconds = now.microsecond
-    timestamp_suffix = f"{timestamp}_{microseconds:06d}"
+    timestamp_suffix = f"{timestamp}{microseconds:06d}"
     return f"{invoice_number}_{timestamp_suffix}"
 
 
