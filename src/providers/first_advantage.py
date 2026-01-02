@@ -2,6 +2,7 @@
 Provider extractor for First Advantage invoices.
 """
 import re
+import pdfplumber
 from typing import List
 from .base import BaseProvider, ExtractedInvoice, ExtractedLineItem
 
@@ -9,76 +10,171 @@ from .base import BaseProvider, ExtractedInvoice, ExtractedLineItem
 class FirstAdvantageProvider(BaseProvider):
     """
     Extractor for First Advantage invoices.
+    
+    Format Characteristics:
+    - Header (Page 1) contains Invoice Number and Invoice Amount.
+    - Footer (Last Page) contains "Background Services Total".
+    - Data is grouped by "Case ID".
+    - Structure:
+      [Blue Header: Case ID | Name | Ordered Date]
+      [Sub-headers: Package Products, Other Fees, Source Fees]
+      [Line Items: Description | Qty | Unit Price | Ext Price]
     """
     
     def __init__(self):
+        """Initialize the First Advantage provider."""
         super().__init__("First Advantage")
         self.identification_keywords = [
             "First Advantage",
-            "FIRST ADVANTAGE",
-            "firstadvantage.com"
+            "Corporate Screening Services",
+            "Background Services"
         ]
     
     def identify(self, pdf_path: str) -> bool:
         """Check if this PDF belongs to First Advantage."""
         text = self._get_pdf_text(pdf_path)
-        text_upper = text.upper()
-        for keyword in self.identification_keywords:
-            if keyword.upper() in text_upper:
-                return True
-        return False
+        return any(kw.upper() in text.upper() for kw in self.identification_keywords)
     
     def extract(self, pdf_path: str) -> ExtractedInvoice:
-        """Extract invoice data from First Advantage's PDF format."""
-        text = self._get_pdf_text(pdf_path)
-        tables = self._get_pdf_tables(pdf_path)
-        
-        invoice_number_match = re.search(r'Invoice\s*[#:]?\s*([A-Z0-9\-]+)', text, re.IGNORECASE)
-        invoice_number = invoice_number_match.group(1) if invoice_number_match else BaseProvider.generate_unknown_invoice_number()
-        
-        total_patterns = [
-            r'Grand\s*Total[:\s]*\$?([\d,]+\.?\d*)',
-            r'Total[:\s]*\$?([\d,]+\.?\d*)',
-        ]
-        grand_total = None
-        for pattern in total_patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                grand_total_str = match.group(1).replace(',', '')
-                try:
-                    grand_total = float(grand_total_str)
-                    break
-                except ValueError:
-                    continue
-        
-        if grand_total is None:
-            raise ValueError("Could not extract grand total from invoice")
-        
+        """
+        Extract invoice data from First Advantage's PDF format.
+        """
+        invoice_number = BaseProvider.generate_unknown_invoice_number()
+        grand_total = 0.0
         line_items = []
-        if tables:
-            line_items = self._extract_from_tables(tables)
-        if not line_items:
-            line_items = self._extract_from_text(text)
-        if not line_items:
-            raise ValueError("Could not extract line items from invoice")
         
+        # State variables to hold context while iterating lines
+        current_case_id = None
+        current_candidate_name = None
+        current_service_date = None
+        
+        with pdfplumber.open(pdf_path) as pdf:
+            # 1. Extract Header Info (Page 1)
+            first_page_text = pdf.pages[0].extract_text()
+            
+            # Invoice Number
+            # Pattern: "Invoice Number 0909180"
+            inv_match = re.search(r'Invoice Number\s+([A-Z0-9\-]+)', first_page_text)
+            if inv_match:
+                invoice_number = inv_match.group(1)
+            
+            # Invoice Amount (Grand Total from Page 1 is usually reliable)
+            # Pattern: "Invoice Amount $9,110.46"
+            total_match = re.search(r'Invoice Amount\s+\$([\d,]+\.\d{2})', first_page_text)
+            if total_match:
+                grand_total = float(total_match.group(1).replace(',', ''))
+            
+            # If not found on page 1, check last page footer
+            if grand_total == 0.0:
+                last_page_text = pdf.pages[-1].extract_text()
+                footer_match = re.search(r'Background Services Total:\s+\$([\d,]+\.\d{2})', last_page_text)
+                if footer_match:
+                    grand_total = float(footer_match.group(1).replace(',', ''))
+
+            # 2. Extract Line Items (Iterate all pages)
+            for page in pdf.pages:
+                # layout=True is critical here to separate the "Ordered:" label from the date
+                text = page.extract_text(layout=True)
+                if not text:
+                    continue
+                
+                lines = text.split('\n')
+                
+                for line in lines:
+                    line = line.strip()
+                    
+                    # --- State Change: New Case Header ---
+                    # Pattern: "Case ID: 3917524 Lesley Lorine Ordered:"
+                    # Note: The date might be on this line or the next, but usually the label is here.
+                    case_match = re.search(r'Case ID:\s*(\d+)\s+(.+?)\s+(?:Ordered:|$)', line)
+                    if case_match:
+                        current_case_id = case_match.group(1)
+                        current_candidate_name = case_match.group(2).strip()
+                        # Reset date, look for it in this line or subsequent lines
+                        current_service_date = None
+                        
+                        # Check if date is on the same line
+                        date_match = re.search(r'(\d{1,2}/\d{1,2}/\d{4})', line)
+                        if date_match:
+                            current_service_date = date_match.group(1)
+                        continue
+
+                    # --- Capture Date if on subsequent line ---
+                    # If we have a case but no date yet, check if this line is just a date
+                    if current_case_id and not current_service_date:
+                        date_match = re.search(r'^\s*(\d{1,2}/\d{1,2}/\d{4})\s*$', line)
+                        if date_match:
+                            current_service_date = date_match.group(1)
+                            continue
+
+                    # --- Skip Headers/Noise ---
+                    if any(x in line for x in ["Package Products:", "Other Fees:", "Source Fees:", "Custom Package", "Qty Price Ext Price"]):
+                        continue
+                    
+                    # --- Extract Line Items ---
+                    # We only extract if we are inside a valid Case context
+                    if current_case_id:
+                        
+                        # Pattern A: Standard Line Item (Description | Qty | Unit Price | Ext Price)
+                        # Example: "County Criminal 2 $8.32 $16.64"
+                        # Regex: Start -> Description -> Space -> Int -> Space -> Currency -> Space -> Currency -> End
+                        std_match = re.search(r'^(.+?)\s+(\d+)\s+\$([\d,]+\.\d{2})\s+\$([\d,]+\.\d{2})$', line)
+                        
+                        if std_match:
+                            description = std_match.group(1).strip()
+                            # qty = std_match.group(2) # Not used in standard model but available
+                            amount = float(std_match.group(4).replace(',', ''))
+                            
+                            item = ExtractedLineItem(
+                                service_date=current_service_date or "", # Might be None if OCR failed to catch date
+                                candidate_id=current_case_id,
+                                candidate_name=current_candidate_name,
+                                amount=amount,
+                                service_description=description,
+                                metadata={
+                                    "quantity": std_match.group(2),
+                                    "unit_price": std_match.group(3)
+                                }
+                            )
+                            line_items.append(item)
+                            continue
+                        
+                        # Pattern B: Source Fees / One-off items (Description | Ext Price)
+                        # Example: "County Criminal Lesley | Lorine | NY - OCA | NY $97.00"
+                        # These often lack the Qty/Unit Price columns in the text stream
+                        # Regex: Start -> Description -> Space -> Currency -> End
+                        source_match = re.search(r'^(.+?)\s+\$([\d,]+\.\d{2})$', line)
+                        
+                        if source_match:
+                            description = source_match.group(1).strip()
+                            amount = float(source_match.group(2).replace(',', ''))
+                            
+                            # Filter out sub-totals or headers that might match this pattern
+                            if "Total" in description or "Invoice" in description:
+                                continue
+
+                            item = ExtractedLineItem(
+                                service_date=current_service_date or "",
+                                candidate_id=current_case_id,
+                                candidate_name=current_candidate_name,
+                                amount=amount,
+                                service_description=description,
+                                metadata={
+                                    "type": "Source Fee/Other"
+                                }
+                            )
+                            line_items.append(item)
+
+        if not line_items:
+            raise ValueError("Could not extract line items. Format may have changed.")
+            
+        if grand_total == 0.0:
+             # Fallback: Sum line items if header extraction failed
+             grand_total = sum(item.amount for item in line_items)
+
         return ExtractedInvoice(
             invoice_number=invoice_number,
             provider_name=self.name,
             line_items=line_items,
             grand_total=grand_total
         )
-    
-    def _extract_from_tables(self, tables: List[List[List[str]]]) -> List[ExtractedLineItem]:
-        """Extract line items from PDF tables."""
-        line_items = []
-        for table in tables:
-            if not table or len(table) < 2:
-                continue
-            # TODO: Implement table extraction based on First Advantage's format
-        return line_items
-    
-    def _extract_from_text(self, text: str) -> List[ExtractedLineItem]:
-        """Extract line items from text."""
-        return []
-
