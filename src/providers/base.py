@@ -17,7 +17,7 @@ def generate_fingerprint_id(date: str, candidate_id: str, name: str, amount: flo
     # Format amount to 2 decimal places to avoid floating point mismatch
     amount_str = "{:.2f}".format(amount)
     
-    # Create raw string: "10/31/2025|12345|John Doe|150.00"
+    # Create raw string: "<date>|<candidate_id>|<name>|<amount>|<service_description>"
     raw_string = f"{date}|{candidate_id}|{name}|{amount_str}|{service_description}"
     
     # Return MD5 hash

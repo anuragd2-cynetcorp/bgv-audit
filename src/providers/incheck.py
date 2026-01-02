@@ -34,7 +34,7 @@ class InCheckProvider(BaseProvider):
         """
         Extract invoice data from InCheck's PDF format using a robust State Machine.
         """
-        invoice_number = "UNKNOWN"
+        invoice_number = BaseProvider.generate_unknown_invoice_number()
         grand_total = 0.0
         line_items = []
         

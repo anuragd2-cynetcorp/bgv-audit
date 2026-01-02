@@ -62,14 +62,14 @@ class UniversalProvider(BaseProvider):
                     line = line.strip()
                     
                     # --- Check for Grand Total (usually last page) ---
-                    # Pattern: "Invoice Total $30,184.30"
+                    # Pattern: "Invoice Total $<amount>"
                     total_match = re.search(r'Invoice Total\s+\$([\d,]+\.\d{2})', line)
                     if total_match:
                         grand_total = float(total_match.group(1).replace(',', ''))
                         continue
 
                     # --- Check for Candidate Header ---
-                    # Pattern: "3/10/2025 AKOTO, GRACE - (Order # 40609596)"
+                    # Pattern: "<date> <name> - (Order # <id>)"
                     # Regex: Date | Name | - | (Order # ID)
                     header_match = re.match(r'^(\d{1,2}/\d{1,2}/\d{4})\s+(.+?)\s+-\s+\(Order\s+#\s+(\d+)\)', line)
                     if header_match:
@@ -88,7 +88,7 @@ class UniversalProvider(BaseProvider):
 
                     # --- Check for Line Item ---
                     # Pattern: Description followed by Amount at the end
-                    # Example: "Statewide Criminal - NC ( $2.50 fee) $2.50"
+                    # Format: "<description> $<amount>"
                     # Regex: Start of line, anything (lazy), space, currency at end
                     item_match = re.match(r'^(.+?)\s+\$([\d,]+\.\d{2})$', line)
                     

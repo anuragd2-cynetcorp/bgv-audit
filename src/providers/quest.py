@@ -64,14 +64,14 @@ class QuestProvider(BaseProvider):
             first_page_text = pdf.pages[0].extract_text()
             
             # Extract Invoice Number
-            # Pattern: "12069956 NDA 9218249080 11/24/2025" (Client | Code | Invoice | Date)
+            # Pattern: "<client> <code> <invoice_number> <date>" (Client | Code | Invoice | Date)
             # We look for the 10-digit number starting with 9 (common for Quest)
             inv_match = re.search(r'\d+\s+NDA\s+(\d+)\s+\d{2}/\d{2}/\d{4}', first_page_text)
             if inv_match:
                 invoice_number = inv_match.group(1)
             
             # Extract Grand Total
-            # Pattern: "Amount Due: ... $2,412.30"
+            # Pattern: "Amount Due: ... $<amount>"
             total_match = re.search(r'Amount Due:[\s\S]*?\$([\d,]+\.\d{2})', first_page_text)
             if total_match:
                 grand_total = float(total_match.group(1).replace(',', ''))
@@ -89,7 +89,7 @@ class QuestProvider(BaseProvider):
                     
                     # --- Pattern A: New Candidate Line ---
                     # Regex: Date | Specimen | Patient ID | Name
-                    # Example: "10/31/2025 0789055 244677729 BAUTISTA,B"
+                    # Format: "<date> <specimen_id> <patient_id> <name>"
                     # Group 1: Date (MM/DD/YYYY)
                     # Group 2: Specimen ID (Ignored for now)
                     # Group 3: Patient ID (Candidate ID)
@@ -107,7 +107,7 @@ class QuestProvider(BaseProvider):
                         
                     # --- Pattern B: Service Line ---
                     # Regex: Description | 7-digit Code | Amount
-                    # Example: "SAP 10-50 + OXY/MEP/N 0019507 $141.75"
+                    # Format: "<description> <code> $<amount>"
                     # We exclude "PATIENT TOTAL" explicitly as it is a sub-sum line
                     
                     if "PATIENT TOTAL" in line:

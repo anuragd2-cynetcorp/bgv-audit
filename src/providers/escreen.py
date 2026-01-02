@@ -95,7 +95,7 @@ class EScreenProvider(BaseProvider):
                             # Description is everything before the name match
                             description = middle_chunk[:name_match.start()].strip()
                         else:
-                            # Fallback: If strict regex fails (e.g. "Van Buren, Martin"), try splitting by double space
+                            # Fallback: If strict regex fails (e.g. multi-word last names), try splitting by double space
                             # This relies on layout=True putting gaps between columns
                             parts = re.split(r'\s{2,}', middle_chunk)
                             if len(parts) >= 2:

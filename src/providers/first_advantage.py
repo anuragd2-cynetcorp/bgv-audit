@@ -53,13 +53,13 @@ class FirstAdvantageProvider(BaseProvider):
             first_page_text = pdf.pages[0].extract_text()
             
             # Invoice Number
-            # Pattern: "Invoice Number 0909180"
+            # Pattern: "Invoice Number <number>"
             inv_match = re.search(r'Invoice Number\s+([A-Z0-9\-]+)', first_page_text)
             if inv_match:
                 invoice_number = inv_match.group(1)
             
             # Invoice Amount (Grand Total from Page 1 is usually reliable)
-            # Pattern: "Invoice Amount $9,110.46"
+            # Pattern: "Invoice Amount $<amount>"
             total_match = re.search(r'Invoice Amount\s+\$([\d,]+\.\d{2})', first_page_text)
             if total_match:
                 grand_total = float(total_match.group(1).replace(',', ''))
@@ -84,7 +84,7 @@ class FirstAdvantageProvider(BaseProvider):
                     line = line.strip()
                     
                     # --- State Change: New Case Header ---
-                    # Pattern: "Case ID: 3917524 Lesley Lorine Ordered:"
+                    # Pattern: "Case ID: <id> <name> Ordered:"
                     # Note: The date might be on this line or the next, but usually the label is here.
                     case_match = re.search(r'Case ID:\s*(\d+)\s+(.+?)\s+(?:Ordered:|$)', line)
                     if case_match:
@@ -116,7 +116,7 @@ class FirstAdvantageProvider(BaseProvider):
                     if current_case_id:
                         
                         # Pattern A: Standard Line Item (Description | Qty | Unit Price | Ext Price)
-                        # Example: "County Criminal 2 $8.32 $16.64"
+                        # Format: "<description> <qty> $<unit_price> $<ext_price>"
                         # Regex: Start -> Description -> Space -> Int -> Space -> Currency -> Space -> Currency -> End
                         std_match = re.search(r'^(.+?)\s+(\d+)\s+\$([\d,]+\.\d{2})\s+\$([\d,]+\.\d{2})$', line)
                         
@@ -140,7 +140,7 @@ class FirstAdvantageProvider(BaseProvider):
                             continue
                         
                         # Pattern B: Source Fees / One-off items (Description | Ext Price)
-                        # Example: "County Criminal Lesley | Lorine | NY - OCA | NY $97.00"
+                        # Format: "<description> $<amount>"
                         # These often lack the Qty/Unit Price columns in the text stream
                         # Regex: Start -> Description -> Space -> Currency -> End
                         source_match = re.search(r'^(.+?)\s+\$([\d,]+\.\d{2})$', line)
