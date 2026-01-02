@@ -120,9 +120,15 @@
                                                             {% for dup in result.details.duplicates %}
                                                             <tr>
                                                                 <td>{{ dup.row_number }}</td>
-                                                                <td>{{ dup.candidate_id }}</td>
-                                                                <td>{{ dup.candidate_name or 'N/A' }}</td>
-                                                                <td>{{ dup.service_description }}</td>
+                                                                <td style="max-width: 120px;">
+                                                                    <span class="text-truncate d-inline-block" style="max-width: 100%;" title="{{ dup.candidate_id }}">{{ dup.candidate_id }}</span>
+                                                                </td>
+                                                                <td style="max-width: 150px;">
+                                                                    <span class="text-truncate d-inline-block" style="max-width: 100%;" title="{{ dup.candidate_name or 'N/A' }}">{{ dup.candidate_name or 'N/A' }}</span>
+                                                                </td>
+                                                                <td style="max-width: 200px;">
+                                                                    <span class="text-truncate d-inline-block" style="max-width: 100%;" title="{{ dup.service_description }}">{{ dup.service_description }}</span>
+                                                                </td>
                                                                 <td>${{ "%.2f"|format(dup.amount) }}</td>
                                                                 {% if dup.duplicate_of_row %}
                                                                     <td>Row {{ dup.duplicate_of_row }}</td>

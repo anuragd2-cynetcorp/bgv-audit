@@ -82,9 +82,15 @@
                             <tbody>
                                 {% for invoice in invoices %}
                                 <tr>
-                                    <td><strong>{{ invoice.invoice_number }}</strong></td>
-                                    <td>{{ invoice.provider_name }}</td>
-                                    <td>{{ invoice.filename }}</td>
+                                    <td style="max-width: 200px;">
+                                        <strong class="text-truncate d-inline-block" style="max-width: 100%;" title="{{ invoice.invoice_number }}">{{ invoice.invoice_number }}</strong>
+                                    </td>
+                                    <td style="max-width: 150px;">
+                                        <span class="text-truncate d-inline-block" style="max-width: 100%;" title="{{ invoice.provider_name }}">{{ invoice.provider_name }}</span>
+                                    </td>
+                                    <td style="max-width: 200px;">
+                                        <span class="text-truncate d-inline-block" style="max-width: 100%;" title="{{ invoice.filename }}">{{ invoice.filename }}</span>
+                                    </td>
                                     <td>${{ "%.2f"|format(invoice.grand_total) }}</td>
                                     <td>
                                         {% if invoice.audit_status == 'PASS' %}
