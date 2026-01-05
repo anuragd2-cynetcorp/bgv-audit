@@ -250,11 +250,15 @@
                     <div class="d-flex justify-content-end align-items-center mt-3 gap-3">
                         <!-- Pagination Info (Right Aligned) -->
                         <div class="text-muted small">
-                            Showing {{ ((pagination.page - 1) * pagination.per_page) + 1 }} to {{ ((pagination.page - 1) * pagination.per_page) + invoices|length }} of {{ pagination.total }} invoices
+                            {% if has_filters %}
+                                Showing {{ invoices|length }} filtered invoice{{ 's' if invoices|length != 1 else '' }}
+                            {% else %}
+                                Showing {{ ((pagination.page - 1) * pagination.per_page) + 1 }} to {{ ((pagination.page - 1) * pagination.per_page) + invoices|length }} of {{ pagination.total }} invoices
+                            {% endif %}
                         </div>
                         
-                        <!-- Pagination Controls (Right Aligned) -->
-                        {% if pagination.total_pages > 1 %}
+                        <!-- Pagination Controls (Right Aligned) - Only show when no filters are active -->
+                        {% if not has_filters and pagination.total_pages > 1 %}
                         <nav aria-label="Invoice pagination">
                             <ul class="pagination mb-0">
                             <!-- Build filter query string -->
