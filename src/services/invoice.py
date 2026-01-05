@@ -76,4 +76,43 @@ class InvoiceService(BaseService[Invoice]):
         """
         # FireO query example - adjust based on your FireO version
         return Invoice.db().filter('uploaded_by', '==', user_email).fetch()
+    
+    def list_invoices_paginated(self, user_email: str, page: int = 1, per_page: int = 10) -> Dict:
+        """
+        List invoices with pagination using limit and count.
+        Only fetches the required records for the current page.
+        
+        Args:
+            user_email: User's email address
+            page: Page number (1-indexed)
+            per_page: Number of records per page
+            
+        Returns:
+            Dictionary with 'invoices' (list), 'total' (int), 'page' (int), 'per_page' (int), 'total_pages' (int)
+        """
+        # Base query: filter by user
+        query = Invoice.db().filter('uploaded_by', '==', user_email)
+        
+        # Get total count without fetching all records
+        total = query.count()
+        
+        # Fetch only the records needed for current page
+        # For page 1: fetch per_page records
+        # For page 2+: fetch up to (page * per_page) and slice
+        fetch_limit = page * per_page
+        all_invoices = list(query.fetch(fetch_limit))
+        
+        # Slice to get current page
+        skip = (page - 1) * per_page
+        invoices = all_invoices[skip:skip + per_page]
+        
+        total_pages = (total + per_page - 1) // per_page if total > 0 else 1
+        
+        return {
+            'invoices': invoices,
+            'total': total,
+            'page': page,
+            'per_page': per_page,
+            'total_pages': total_pages
+        }
 

@@ -32,16 +32,32 @@ def dashboard():
     invoice_service = InvoiceService()
     user_email = session['user']['email']
     
+    # Get pagination parameters
     try:
-        invoices = invoice_service.list_invoices_by_user(user_email)
-        # Convert QueryIterator to list to allow iteration and length checking in template
-        if invoices is None:
-            invoices = []
-        else:
-            invoices = list(invoices)
+        page = int(request.args.get('page', 1))
+        if page < 1:
+            page = 1
+    except (ValueError, TypeError):
+        page = 1
+    
+    try:
+        # Use paginated method
+        pagination_data = invoice_service.list_invoices_paginated(
+            user_email=user_email,
+            page=page,
+            per_page=10
+        )
+        invoices = pagination_data['invoices']
     except Exception as e:
         logger.error(f"Error fetching invoices: {e}", exc_info=True)
         invoices = []
+        pagination_data = {
+            'invoices': [],
+            'total': 0,
+            'page': 1,
+            'per_page': 10,
+            'total_pages': 1
+        }
     
     # Get list of all available providers from enum
     providers = Provider.list_all()
@@ -49,7 +65,8 @@ def dashboard():
     return render_template('dashboard.html', 
                         user=session['user'],
                         invoices=invoices,
-                        providers=providers)
+                        providers=providers,
+                        pagination=pagination_data)
 
 @main_bp.route('/upload', methods=['POST'])
 @login_required

@@ -66,6 +66,11 @@
             </div>
             <div class="card-body">
                 {% if invoices %}
+                    {% if pagination %}
+                    <div class="mb-3 text-muted small">
+                        Showing {{ ((pagination.page - 1) * pagination.per_page) + 1 }} to {{ ((pagination.page - 1) * pagination.per_page) + invoices|length }} of {{ pagination.total }} invoices
+                    </div>
+                    {% endif %}
                     <div class="table-responsive">
                         <table class="table table-hover">
                             <thead>
@@ -112,6 +117,63 @@
                             </tbody>
                         </table>
                     </div>
+                    
+                    <!-- Pagination Controls -->
+                    {% if pagination and pagination.total_pages > 1 %}
+                    <nav aria-label="Invoice pagination">
+                        <ul class="pagination justify-content-center mb-0">
+                            <!-- Previous Button -->
+                            <li class="page-item {% if pagination.page <= 1 %}disabled{% endif %}">
+                                <a class="page-link" 
+                                   href="?page={{ pagination.page - 1 }}"
+                                   {% if pagination.page <= 1 %}tabindex="-1" aria-disabled="true"{% endif %}>
+                                    <i class="bi bi-chevron-left"></i> Previous
+                                </a>
+                            </li>
+                            
+                            <!-- Page Numbers -->
+                            {% set start_page = [1, pagination.page - 2]|max %}
+                            {% set end_page = [pagination.total_pages, pagination.page + 2]|min %}
+                            
+                            {% if start_page > 1 %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page=1">1</a>
+                            </li>
+                            {% if start_page > 2 %}
+                            <li class="page-item disabled">
+                                <span class="page-link">...</span>
+                            </li>
+                            {% endif %}
+                            {% endif %}
+                            
+                            {% for p in range(start_page, end_page + 1) %}
+                            <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                                <a class="page-link" href="?page={{ p }}">{{ p }}</a>
+                            </li>
+                            {% endfor %}
+                            
+                            {% if end_page < pagination.total_pages %}
+                            {% if end_page < pagination.total_pages - 1 %}
+                            <li class="page-item disabled">
+                                <span class="page-link">...</span>
+                            </li>
+                            {% endif %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ pagination.total_pages }}">{{ pagination.total_pages }}</a>
+                            </li>
+                            {% endif %}
+                            
+                            <!-- Next Button -->
+                            <li class="page-item {% if pagination.page >= pagination.total_pages %}disabled{% endif %}">
+                                <a class="page-link" 
+                                   href="?page={{ pagination.page + 1 }}"
+                                   {% if pagination.page >= pagination.total_pages %}tabindex="-1" aria-disabled="true"{% endif %}>
+                                    Next <i class="bi bi-chevron-right"></i>
+                                </a>
+                            </li>
+                        </ul>
+                    </nav>
+                    {% endif %}
                 {% else %}
                     <div class="text-center py-5">
                         <i class="bi bi-inbox fs-1 text-muted mb-3"></i>
