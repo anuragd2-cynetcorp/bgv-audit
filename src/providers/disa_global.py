@@ -2,6 +2,7 @@
 Provider extractor for Disa Global invoices.
 """
 import re
+import pdfplumber
 from typing import List
 from .base import BaseProvider, ExtractedInvoice, ExtractedLineItem
 
@@ -9,152 +10,123 @@ from .base import BaseProvider, ExtractedInvoice, ExtractedLineItem
 class DisaGlobalProvider(BaseProvider):
     """
     Extractor for Disa Global invoices.
+    
+    Format Characteristics:
+    - Page 1: Invoice Summary (Invoice #, Total).
+    - Pages 2-3: Category Summary (Skip these).
+    - Page 4+: Detailed Case List in a Grid/Table format.
+    - Table Columns: [Date, Order #, Subject, User, Order Content, Total]
     """
     
     def __init__(self):
+        """Initialize the Disa Global provider."""
         super().__init__("Disa Global")
-        # Define provider-specific keywords for identification
-        self.identification_keywords = [
-            "Disa Global",
-            "DISA GLOBAL",
-            "disa-global.com"
-        ]
+        self.identification_keywords = ["DISA Global Solutions", "Strongsville, OH", "Accounting.CLE@disa.com"]
     
     def identify(self, pdf_path: str) -> bool:
-        """
-        Check if this PDF belongs to Disa Global.
-        """
+        """Check if this PDF belongs to Disa Global."""
         text = self._get_pdf_text(pdf_path)
-        text_upper = text.upper()
-        
-        # Check for identification keywords
-        for keyword in self.identification_keywords:
-            if keyword.upper() in text_upper:
-                return True
-        
-        return False
+        return "DISA Global Solutions" in text and "Strongsville" in text
     
     def extract(self, pdf_path: str) -> ExtractedInvoice:
         """
         Extract invoice data from Disa Global's PDF format.
-        TODO: Customize this method based on Disa Global's actual invoice layout.
         """
-        text = self._get_pdf_text(pdf_path)
-        tables = self._get_pdf_tables(pdf_path)
-        
-        # Extract Invoice Number
-        invoice_number_match = re.search(r'Invoice\s*[#:]?\s*([A-Z0-9\-]+)', text, re.IGNORECASE)
-        invoice_number = invoice_number_match.group(1) if invoice_number_match else BaseProvider.generate_unknown_invoice_number()
-        
-        # Extract Grand Total
-        total_patterns = [
-            r'Grand\s*Total[:\s]*\$?([\d,]+\.?\d*)',
-            r'Total[:\s]*\$?([\d,]+\.?\d*)',
-            r'Amount\s*Due[:\s]*\$?([\d,]+\.?\d*)'
-        ]
-        grand_total = None
-        for pattern in total_patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                grand_total_str = match.group(1).replace(',', '')
-                try:
-                    grand_total = float(grand_total_str)
-                    break
-                except ValueError:
-                    continue
-        
-        if grand_total is None:
-            raise ValueError("Could not extract grand total from invoice")
-        
-        # Extract Line Items
+        invoice_number = "UNKNOWN"
+        grand_total = 0.0
         line_items = []
         
-        if tables:
-            line_items = self._extract_from_tables(tables)
-        
+        with pdfplumber.open(pdf_path) as pdf:
+            # 1. Extract Header Info (Page 1)
+            first_page_text = pdf.pages[0].extract_text()
+            
+            # Invoice Number
+            # Pattern: 7-digit number followed by date (MM/DD/YYYY)
+            inv_match = re.search(r'(\d{7})\s+\d{2}/\d{2}/\d{4}', first_page_text)
+            if inv_match:
+                invoice_number = inv_match.group(1)
+            
+            # Grand Total
+            # Pattern: "BALANCE DUE" followed by dollar amount
+            total_match = re.search(r'BALANCE DUE\s+\$([\d,]+\.\d{2})', first_page_text)
+            if total_match:
+                grand_total = float(total_match.group(1).replace(',', ''))
+
+            # 2. Extract Line Items (Iterate all pages)
+            # We are looking for the detailed table which usually starts on Page 4
+            for page in pdf.pages:
+                # Disa tables have vertical lines, so 'lines' strategy is best.
+                # If that fails, 'text' strategy works for whitespace alignment.
+                tables = page.extract_tables(table_settings={
+                    "vertical_strategy": "lines", 
+                    "horizontal_strategy": "lines",
+                    "snap_tolerance": 3
+                })
+                
+                # Fallback if lines aren't detected (sometimes headers don't have lines)
+                if not tables:
+                    tables = page.extract_tables(table_settings={
+                        "vertical_strategy": "text",
+                        "horizontal_strategy": "text"
+                    })
+
+                for table in tables:
+                    for row in table:
+                        # Clean row data (remove None)
+                        row = [cell.strip() if cell else "" for cell in row]
+                        
+                        # We need a row with at least 6 columns
+                        # [Date, Order #, Subject, User, Order Content, Total]
+                        if len(row) < 6:
+                            continue
+                            
+                        # Check if this is a data row (First column looks like a date)
+                        date_str = row[0]
+                        if not re.match(r'\d{1,2}/\d{1,2}/\d{4}', date_str):
+                            continue
+                            
+                        # Extract Fields
+                        # Col 0: Date -> Service Date
+                        # Col 1: Order # -> Candidate ID
+                        # Col 2: Subject -> Candidate Name
+                        # Col 4: Order Content -> Description
+                        # Col 5: Total -> Amount
+                        
+                        order_id = row[1]
+                        candidate_name = row[2]
+                        # Description: Take the first line of the content or generic text
+                        raw_desc = row[4].replace('\n', ' ').strip()
+                        description = raw_desc[:50] + "..." if len(raw_desc) > 50 else raw_desc
+                        
+                        amount_str = row[5].replace('$', '').replace(',', '')
+                        
+                        try:
+                            amount = float(amount_str)
+                        except ValueError:
+                            continue # Skip if no valid price
+                            
+                        # Create Line Item
+                        item = ExtractedLineItem(
+                            service_date=date_str,
+                            candidate_id=order_id,
+                            candidate_name=candidate_name,
+                            amount=amount,
+                            service_description=description,
+                            metadata={
+                                "user_ordered": row[3]
+                            }
+                        )
+                        line_items.append(item)
+
         if not line_items:
-            line_items = self._extract_from_text(text)
-        
-        if not line_items:
-            raise ValueError("Could not extract line items from invoice")
-        
+            raise ValueError("Could not extract line items. Format may have changed.")
+            
+        if grand_total == 0.0:
+             grand_total = sum(item.amount for item in line_items)
+
         return ExtractedInvoice(
             invoice_number=invoice_number,
             provider_name=self.name,
             line_items=line_items,
             grand_total=grand_total
         )
-    
-    def _extract_from_tables(self, tables: List[List[List[str]]]) -> List[ExtractedLineItem]:
-        """Extract line items from PDF tables."""
-        line_items = []
-        
-        for table in tables:
-            if not table or len(table) < 2:
-                continue
-            
-            header_row = table[0]
-            
-            # Identify column indices - customize based on Disa Global's format
-            candidate_name_idx = None
-            candidate_id_idx = None
-            service_desc_idx = None
-            service_date_idx = None
-            amount_idx = None
-            
-            for idx, header in enumerate(header_row):
-                header_lower = str(header).lower() if header else ""
-                if 'candidate' in header_lower and 'name' in header_lower:
-                    candidate_name_idx = idx
-                elif 'candidate' in header_lower and ('id' in header_lower or 'identifier' in header_lower):
-                    candidate_id_idx = idx
-                elif 'service' in header_lower or 'description' in header_lower:
-                    service_desc_idx = idx
-                elif 'date' in header_lower or 'service date' in header_lower:
-                    service_date_idx = idx
-                elif 'cost' in header_lower or 'amount' in header_lower or 'price' in header_lower:
-                    amount_idx = idx
-            
-            # Extract data rows
-            for row in table[1:]:
-                if len(row) < max(filter(None, [candidate_name_idx, candidate_id_idx, service_desc_idx, amount_idx]), default=0):
-                    continue
-                
-                try:
-                    candidate_name = str(row[candidate_name_idx]).strip() if candidate_name_idx is not None else ""
-                    candidate_id = str(row[candidate_id_idx]).strip() if candidate_id_idx is not None else ""
-                    service_desc = str(row[service_desc_idx]).strip() if service_desc_idx is not None else ""
-                    service_date = str(row[service_date_idx]).strip() if service_date_idx is not None else ""
-                    amount_str = str(row[amount_idx]).strip() if amount_idx is not None else ""
-                    
-                    amount_str = re.sub(r'[^\d.]', '', amount_str)
-                    if not amount_str:
-                        continue
-                    
-                    amount = float(amount_str)
-                    
-                    if not candidate_id or not service_desc:
-                        continue
-                    
-                    # If no service_date found, use empty string (will need to be handled by normalization)
-                    if not service_date:
-                        service_date = ""
-                    
-                    line_items.append(ExtractedLineItem(
-                        service_date=service_date,
-                        candidate_id=candidate_id,
-                        candidate_name=candidate_name,
-                        amount=amount,
-                        service_description=service_desc
-                    ))
-                except (ValueError, IndexError):
-                    continue
-        
-        return line_items
-    
-    def _extract_from_text(self, text: str) -> List[ExtractedLineItem]:
-        """Extract line items from text if tables are not available."""
-        line_items = []
-        # TODO: Implement text-based extraction if needed
-        return line_items
-
