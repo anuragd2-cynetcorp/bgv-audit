@@ -1,0 +1,25 @@
+/* Dashboard specific styles */
+
+/* Filter dropdown styles */
+.dropdown-menu {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+/* Tag styles for selected filters */
+.status-tag .btn-close,
+.provider-tag .btn-close {
+    font-size: 0.7em;
+    opacity: 0.8;
+}
+
+.status-tag:hover .btn-close,
+.provider-tag:hover .btn-close {
+    opacity: 1;
+}
+
+.badge {
+    font-size: 0.875rem;
+    padding: 0.35em 0.65em;
+}
+

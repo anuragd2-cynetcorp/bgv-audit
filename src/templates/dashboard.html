@@ -1,5 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Dashboard{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+{% endblock %}
 {% block content %}
 <div class="row">
     <div class="col-12 mb-4 d-flex justify-content-between align-items-center">
@@ -59,66 +62,123 @@
 <div class="row mt-4">
     <div class="col-12">
         <div class="card shadow-sm mb-3">
-            <div class="card-header bg-light">
-                <h6 class="mb-0">
-                    <i class="bi bi-funnel me-2"></i>Filters
-                </h6>
+            <div class="card-header bg-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-funnel me-2"></i>Filters
+                    </h5>
+                    {% if current_statuses or current_providers %}
+                    <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-x-circle me-1"></i>Clear All
+                    </a>
+                    {% endif %}
+                </div>
             </div>
             <div class="card-body">
-                <form method="GET" action="{{ url_for('main.dashboard') }}" class="row g-3">
-                    <!-- Status Filter -->
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">Status</label>
-                        <div class="d-flex flex-wrap gap-3">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="status" value="PASS" id="status-pass" {% if 'PASS' in current_statuses %}checked{% endif %}>
-                                <label class="form-check-label" for="status-pass">
-                                    <span class="badge bg-success">PASS</span>
-                                </label>
+                <form method="GET" action="{{ url_for('main.dashboard') }}" id="filterForm">
+                    <div class="row g-4">
+                        <!-- Status Filter -->
+                        <div class="col-lg-4">
+                            <label class="form-label fw-semibold mb-2 d-block">Status</label>
+                            <div class="dropdown">
+                                <button class="btn btn-outline-secondary dropdown-toggle w-100 text-start" type="button" id="statusDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <span id="statusPlaceholder">Select Status</span>
+                                </button>
+                                <ul class="dropdown-menu w-100" aria-labelledby="statusDropdown">
+                                    <li>
+                                        <a class="dropdown-item" href="#" data-value="PASS">
+                                            <div class="form-check">
+                                                <input class="form-check-input status-checkbox" type="checkbox" value="PASS" id="status-pass" {% if 'PASS' in current_statuses %}checked{% endif %}>
+                                                <label class="form-check-label w-100" for="status-pass">
+                                                    <span class="badge bg-success">PASS</span>
+                                                </label>
+                                            </div>
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item" href="#" data-value="FAIL">
+                                            <div class="form-check">
+                                                <input class="form-check-input status-checkbox" type="checkbox" value="FAIL" id="status-fail" {% if 'FAIL' in current_statuses %}checked{% endif %}>
+                                                <label class="form-check-label w-100" for="status-fail">
+                                                    <span class="badge bg-danger">FAIL</span>
+                                                </label>
+                                            </div>
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item" href="#" data-value="PENDING">
+                                            <div class="form-check">
+                                                <input class="form-check-input status-checkbox" type="checkbox" value="PENDING" id="status-pending" {% if 'PENDING' in current_statuses %}checked{% endif %}>
+                                                <label class="form-check-label w-100" for="status-pending">
+                                                    <span class="badge bg-warning text-dark">PENDING</span>
+                                                </label>
+                                            </div>
+                                        </a>
+                                    </li>
+                                </ul>
                             </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="status" value="FAIL" id="status-fail" {% if 'FAIL' in current_statuses %}checked{% endif %}>
-                                <label class="form-check-label" for="status-fail">
-                                    <span class="badge bg-danger">FAIL</span>
-                                </label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="status" value="PENDING" id="status-pending" {% if 'PENDING' in current_statuses %}checked{% endif %}>
-                                <label class="form-check-label" for="status-pending">
-                                    <span class="badge bg-warning">PENDING</span>
-                                </label>
+                            <!-- Selected Status Tags -->
+                            <div id="statusTags" class="mt-2 d-flex flex-wrap gap-2">
+                                {% if current_statuses %}
+                                    {% for status in current_statuses %}
+                                    <span class="badge bg-{% if status == 'PASS' %}success{% elif status == 'FAIL' %}danger{% else %}warning text-dark{% endif %} d-flex align-items-center gap-1 status-tag" data-value="{{ status }}">
+                                        {{ status }}
+                                        <button type="button" class="btn-close btn-close-white" aria-label="Remove"></button>
+                                    </span>
+                                    {% endfor %}
+                                {% endif %}
                             </div>
                         </div>
-                    </div>
-                    
-                    <!-- Provider Filter -->
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">Provider</label>
-                        <div class="d-flex flex-wrap gap-3">
-                            {% if providers %}
-                                {% for provider in providers %}
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="provider" value="{{ provider }}" id="provider-{{ loop.index }}" {% if provider in current_providers %}checked{% endif %}>
-                                    <label class="form-check-label" for="provider-{{ loop.index }}">
+                        
+                        <!-- Provider Filter -->
+                        <div class="col-lg-8">
+                            <label class="form-label fw-semibold mb-2 d-block">Provider</label>
+                            <div class="dropdown">
+                                <button class="btn btn-outline-secondary dropdown-toggle w-100 text-start" type="button" id="providerDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <span id="providerPlaceholder">Select Provider</span>
+                                </button>
+                                <ul class="dropdown-menu w-100" aria-labelledby="providerDropdown">
+                                    {% if providers %}
+                                        {% for provider in providers %}
+                                        <li>
+                                            <a class="dropdown-item" href="#" data-value="{{ provider }}">
+                                                <div class="form-check">
+                                                    <input class="form-check-input provider-checkbox" type="checkbox" value="{{ provider }}" id="provider-{{ loop.index }}" {% if provider in current_providers %}checked{% endif %}>
+                                                    <label class="form-check-label w-100" for="provider-{{ loop.index }}">
+                                                        {{ provider }}
+                                                    </label>
+                                                </div>
+                                            </a>
+                                        </li>
+                                        {% endfor %}
+                                    {% endif %}
+                                </ul>
+                            </div>
+                            <!-- Selected Provider Tags -->
+                            <div id="providerTags" class="mt-2 d-flex flex-wrap gap-2">
+                                {% if current_providers %}
+                                    {% for provider in current_providers %}
+                                    <span class="badge bg-primary d-flex align-items-center gap-1 provider-tag" data-value="{{ provider }}">
                                         {{ provider }}
-                                    </label>
-                                </div>
-                                {% endfor %}
-                            {% endif %}
+                                        <button type="button" class="btn-close btn-close-white" aria-label="Remove"></button>
+                                    </span>
+                                    {% endfor %}
+                                {% endif %}
+                            </div>
                         </div>
                     </div>
                     
-                    <!-- Action Buttons -->
-                    <div class="col-12">
-                        <div class="d-flex gap-2">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-funnel-fill me-1"></i>Apply Filters
-                            </button>
-                            {% if current_statuses or current_providers %}
-                            <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary">
-                                <i class="bi bi-x-circle me-1"></i>Clear Filters
-                            </a>
-                            {% endif %}
+                    <!-- Hidden inputs for form submission -->
+                    <div id="hiddenInputs"></div>
+                    
+                    <!-- Action Button -->
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <div class="d-flex justify-content-end">
+                                <button type="submit" class="btn btn-primary px-4">
+                                    <i class="bi bi-funnel-fill me-2"></i>Apply Filters
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </form>
