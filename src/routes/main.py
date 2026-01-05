@@ -40,12 +40,18 @@ def dashboard():
     except (ValueError, TypeError):
         page = 1
     
+    # Get filter parameters (multiselect - can have multiple values)
+    statuses = request.args.getlist('status') or None
+    selected_providers = request.args.getlist('provider') or None
+    
     try:
         # Use paginated method
         pagination_data = invoice_service.list_invoices_paginated(
             user_email=user_email,
             page=page,
-            per_page=10
+            per_page=10,
+            statuses=statuses,
+            providers=selected_providers
         )
         invoices = pagination_data['invoices']
     except Exception as e:
@@ -60,13 +66,15 @@ def dashboard():
         }
     
     # Get list of all available providers from enum
-    providers = Provider.list_all()
+    all_providers = Provider.list_all()
     
     return render_template('dashboard.html', 
                         user=session['user'],
                         invoices=invoices,
-                        providers=providers,
-                        pagination=pagination_data)
+                        providers=all_providers,
+                        pagination=pagination_data,
+                        current_statuses=statuses or [],
+                        current_providers=selected_providers or [])
 
 @main_bp.route('/upload', methods=['POST'])
 @login_required
