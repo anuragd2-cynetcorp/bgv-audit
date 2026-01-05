@@ -2,53 +2,119 @@
 Provider extractor for Concentra invoices.
 """
 import re
+import pdfplumber
 from typing import List
 from .base import BaseProvider, ExtractedInvoice, ExtractedLineItem
 
 
 class ConcentraProvider(BaseProvider):
-    """Extractor for Concentra invoices."""
+    """
+    Extractor for Concentra invoices.
+    
+    Format Characteristics:
+    - Header contains 'Invoice:' or 'Invoice Number'.
+    - Line Items are text rows.
+    - Structure: Date | Name | SSN (masked) | Description | Amount
+    - Strategy: Use the distinct SSN pattern (XXX-XX-####) to split the line.
+    """
     
     def __init__(self):
+        """Initialize the Concentra provider."""
         super().__init__("Concentra")
-        self.identification_keywords = ["Concentra", "CONCENTRA", "concentra.com"]
+        self.identification_keywords = ["Concentra", "Occupational Health Centers"]
     
     def identify(self, pdf_path: str) -> bool:
         """Check if this PDF belongs to Concentra."""
         text = self._get_pdf_text(pdf_path)
-        return any(kw.upper() in text.upper() for kw in self.identification_keywords)
+        return any(kw in text for kw in self.identification_keywords)
     
     def extract(self, pdf_path: str) -> ExtractedInvoice:
-        """Extract invoice data from Concentra's PDF format."""
-        text = self._get_pdf_text(pdf_path)
-        tables = self._get_pdf_tables(pdf_path)
+        """
+        Extract invoice data from Concentra's PDF format.
+        """
+        invoice_number = "UNKNOWN"
+        grand_total = 0.0
+        line_items = []
         
-        invoice_number_match = re.search(r'Invoice\s*[#:]?\s*([A-Z0-9\-]+)', text, re.IGNORECASE)
-        invoice_number = invoice_number_match.group(1) if invoice_number_match else BaseProvider.generate_unknown_invoice_number()
-        
-        match = re.search(r'Total[:\s]*\$?([\d,]+\.?\d*)', text, re.IGNORECASE)
-        grand_total = float(match.group(1).replace(',', '')) if match else None
-        
-        if grand_total is None:
-            raise ValueError("Could not extract grand total from invoice")
-        
-        line_items = self._extract_from_tables(tables) if tables else []
+        with pdfplumber.open(pdf_path) as pdf:
+            # 1. Extract Header Info (Page 1)
+            first_page_text = pdf.pages[0].extract_text()
+            
+            # Invoice Number
+            inv_match = re.search(r'Invoice(?:\s*Number)?\s*[:#]?\s*(\d+)', first_page_text, re.IGNORECASE)
+            if inv_match:
+                invoice_number = inv_match.group(1)
+            
+            # Grand Total
+            total_match = re.search(r'Balance(?: Due)?\s*[:]?\s*\$?([\d,]+\.\d{2})', first_page_text, re.IGNORECASE)
+            if total_match:
+                grand_total = float(total_match.group(1).replace(',', ''))
+
+            # 2. Extract Line Items (Iterate all pages)
+            for page in pdf.pages:
+                # layout=True helps separate columns, but we rely on regex anchors
+                text = page.extract_text(layout=True) 
+                if not text:
+                    continue
+                
+                lines = text.split('\n')
+                
+                for line in lines:
+                    line = line.strip()
+                    
+                    # --- Anchor Strategy: Find the SSN ---
+                    # Concentra always puts masked SSN (XXX-XX-####) in the middle of the line
+                    ssn_match = re.search(r'(XXX-XX-\d{4})', line)
+                    
+                    if ssn_match:
+                        # Split the line into two parts: Before SSN and After SSN
+                        pre_ssn = line[:ssn_match.start()]
+                        post_ssn = line[ssn_match.end():]
+                        
+                        candidate_id = ssn_match.group(1)
+                        
+                        # --- Parse Left Side (Date + Name) ---
+                        # Look for Date at the start
+                        date_match = re.match(r'^\s*(\d{1,2}/\d{1,2}/\d{4})', pre_ssn)
+                        
+                        if date_match:
+                            service_date = date_match.group(1)
+                            # Name is everything between Date and SSN
+                            candidate_name = pre_ssn[date_match.end():].strip()
+                            
+                            # --- Parse Right Side (Description + Amount) ---
+                            # Look for Amount at the very end of the line
+                            amount_match = re.search(r'([\d,]+\.\d{2})\s*$', post_ssn)
+                            
+                            if amount_match:
+                                amount_str = amount_match.group(1).replace(',', '')
+                                amount = float(amount_str)
+                                
+                                # Description is everything between SSN and Amount
+                                description = post_ssn[:amount_match.start()].strip()
+                                
+                                # Create Line Item
+                                item = ExtractedLineItem(
+                                    service_date=service_date,
+                                    candidate_id=candidate_id,
+                                    candidate_name=candidate_name,
+                                    amount=amount,
+                                    service_description=description,
+                                    metadata={
+                                        "source_ssn": candidate_id
+                                    }
+                                )
+                                line_items.append(item)
+
         if not line_items:
-            raise ValueError("Could not extract line items from invoice")
-        
+            raise ValueError("Could not extract line items from invoice. Format may have changed.")
+            
+        if grand_total == 0.0:
+             grand_total = sum(item.amount for item in line_items)
+
         return ExtractedInvoice(
             invoice_number=invoice_number,
             provider_name=self.name,
             line_items=line_items,
             grand_total=grand_total
         )
-    
-    def _extract_from_tables(self, tables: List[List[List[str]]]) -> List[ExtractedLineItem]:
-        """Extract line items from PDF tables."""
-        # TODO: Implement based on Concentra's format
-        return []
-    
-    def _extract_from_text(self, text: str) -> List[ExtractedLineItem]:
-        """Extract line items from text."""
-        return []
-
