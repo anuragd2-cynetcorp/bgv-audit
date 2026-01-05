@@ -6,6 +6,19 @@
     overflow-y: auto;
 }
 
+/* Position dropdown toggle icon at the right end */
+.dropdown-toggle {
+    position: relative;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.dropdown-toggle::after {
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
 /* Tag styles for selected filters */
 .status-tag .btn-close,
 .provider-tag .btn-close {
