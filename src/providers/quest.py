@@ -160,12 +160,5 @@ class QuestProvider(BaseProvider):
             grand_total=grand_total
         )
     
-    def _extract_from_tables(self, tables: List[List[List[str]]]) -> List[ExtractedLineItem]:
-        """Extract line items from PDF tables."""
-        # TODO: Implement based on Quest's format
-        return []
-    
-    def _extract_from_text(self, text: str) -> List[ExtractedLineItem]:
-        """Extract line items from text."""
-        return []
+
 
