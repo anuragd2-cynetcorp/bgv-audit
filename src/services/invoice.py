@@ -5,6 +5,7 @@ from typing import Dict, List, Optional
 from src.models import Invoice
 from src.services.base import BaseService
 from src.providers.base import ExtractedInvoice, append_timestamp_to_invoice_number
+from src.utils.paginator import Paginator
 from src.logger import get_logger
 
 logger = get_logger()
@@ -79,8 +80,7 @@ class InvoiceService(BaseService[Invoice]):
     
     def list_invoices_paginated(self, user_email: str, page: int = 1, per_page: int = 10) -> Dict:
         """
-        List invoices with pagination using limit and count.
-        Only fetches the required records for the current page.
+        List invoices with pagination using the reusable Paginator utility.
         
         Args:
             user_email: User's email address
@@ -93,26 +93,15 @@ class InvoiceService(BaseService[Invoice]):
         # Base query: filter by user
         query = Invoice.db().filter('uploaded_by', '==', user_email)
         
-        # Get total count without fetching all records
-        total = query.count()
+        # Use Paginator utility
+        pagination_result = Paginator.paginate(query, page=page, per_page=per_page)
         
-        # Fetch only the records needed for current page
-        # For page 1: fetch per_page records
-        # For page 2+: fetch up to (page * per_page) and slice
-        fetch_limit = page * per_page
-        all_invoices = list(query.fetch(fetch_limit))
-        
-        # Slice to get current page
-        skip = (page - 1) * per_page
-        invoices = all_invoices[skip:skip + per_page]
-        
-        total_pages = (total + per_page - 1) // per_page if total > 0 else 1
-        
+        # Map to expected format (using 'invoices' instead of 'items')
         return {
-            'invoices': invoices,
-            'total': total,
-            'page': page,
-            'per_page': per_page,
-            'total_pages': total_pages
+            'invoices': pagination_result['items'],
+            'total': pagination_result['total'],
+            'page': pagination_result['page'],
+            'per_page': pagination_result['per_page'],
+            'total_pages': pagination_result['total_pages']
         }
 
