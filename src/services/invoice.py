@@ -4,7 +4,7 @@ Service for invoice processing and management.
 from typing import Dict, List, Optional
 from src.models import Invoice
 from src.services.base import BaseService
-from src.providers.base import ExtractedInvoice, append_timestamp_to_invoice_number
+from src.providers.base import ExtractedInvoice, append_timestamp_to_invoice_number, hash_invoice_id
 from src.utils.paginator import Paginator
 from src.logger import get_logger
 
@@ -38,8 +38,9 @@ class InvoiceService(BaseService[Invoice]):
         # Store raw invoice number (convert "__" to "_" if not found)
         raw_invoice_number = extracted.invoice_number if extracted.invoice_number != "__" else "_"
         
-        # Generate unique ID with timestamp for document ID
-        invoice_id = append_timestamp_to_invoice_number(extracted.invoice_number)
+        # Generate unique ID with timestamp, then hash it for consistent format
+        timestamped_invoice_number = append_timestamp_to_invoice_number(extracted.invoice_number)
+        invoice_id = hash_invoice_id(timestamped_invoice_number)
         
         # Create invoice document
         # The doc_id becomes the document ID, accessible via invoice.id

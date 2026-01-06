@@ -48,6 +48,20 @@ def append_timestamp_to_invoice_number(invoice_number: str) -> str:
         return f"{invoice_number}_{timestamp_suffix}"
 
 
+def hash_invoice_id(timestamped_invoice_number: str) -> str:
+    """
+    Generate a consistent hash of the timestamped invoice number for use as document ID.
+    This ensures consistent length and format for all document IDs.
+    
+    Args:
+        timestamped_invoice_number: The invoice number with timestamp appended
+        
+    Returns:
+        SHA256 hash (64 characters) of the timestamped invoice number
+    """
+    return hashlib.sha256(timestamped_invoice_number.encode('utf-8')).hexdigest()
+
+
 class ExtractedLineItem:
     """Represents a single line item extracted from an invoice."""
     def __init__(
