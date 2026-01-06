@@ -52,14 +52,30 @@ document.addEventListener('DOMContentLoaded', function() {
                 'X-Requested-With': 'XMLHttpRequest'
             }
         })
-        .then(response => {
+        .then(async response => {
             if (!response.ok) {
-                // If response is not ok, try to parse JSON error
-                return response.json().then(err => {
-                    throw new Error(err.message || 'Server error');
-                }).catch(() => {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                });
+                // Try to parse JSON error first
+                let errorData = null;
+                try {
+                    errorData = await response.json();
+                } catch (e) {
+                    // If JSON parsing fails, try to get text
+                    try {
+                        const text = await response.text();
+                        errorData = { message: text || 'An error occurred while processing the invoice.' };
+                    } catch (e2) {
+                        // If both fail, use a user-friendly default
+                        errorData = { message: 'An error occurred while processing the invoice. Please try again.' };
+                    }
+                }
+                
+                // Get provider name from form as fallback
+                const providerName = errorData.provider_name || uploadForm.querySelector('#provider_name')?.value || '';
+                
+                const error = new Error(errorData.message || 'An error occurred while processing the invoice.');
+                error.providerName = providerName;
+                error.isExtractionError = errorData.is_extraction_error !== undefined ? errorData.is_extraction_error : true;
+                throw error;
             }
             return response.json();
         })
@@ -82,8 +98,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (fullPageLoader) {
                     fullPageLoader.classList.add('d-none');
                 }
-                alert('Error: ' + (data.message || 'An error occurred while processing the invoice.'));
-                // Reopen modal to show error if needed
+                showErrorInModal(data.message || 'An error occurred while processing the invoice.', data.provider_name, data.is_extraction_error);
+                // Reopen modal to show error
                 if (modal) {
                     modal.show();
                 }
@@ -95,15 +111,65 @@ document.addEventListener('DOMContentLoaded', function() {
                 fullPageLoader.classList.add('d-none');
             }
             
-            // Show error alert
-            alert('Error: ' + (error.message || 'An error occurred while processing the invoice. Please try again.'));
+            // Get provider name from error object or form
+            const providerName = error.providerName || uploadForm.querySelector('#provider_name')?.value || '';
+            const isExtractionError = error.isExtractionError !== undefined ? error.isExtractionError : true;
+            
+            // Show user-friendly error message (never show generic HTTP errors)
+            let errorMessage = error.message || 'An error occurred while processing the invoice. Please try again.';
+            
+            // Replace generic HTTP error messages with user-friendly ones
+            if (errorMessage.includes('HTTP error!') || errorMessage.includes('status:')) {
+                errorMessage = 'An error occurred while processing the invoice. Please check your file and try again.';
+            }
+            
+            showErrorInModal(errorMessage, providerName, isExtractionError);
             console.error('Error:', error);
             
-            // Reopen modal if needed
+            // Reopen modal to show error
             if (modal) {
                 modal.show();
             }
         });
+    
+    // Function to show error message in modal alert
+    function showErrorInModal(message, providerName, isExtractionError) {
+        if (!uploadAlert) return;
+        
+        let errorMessage = message;
+        
+        // If it's an extraction error and we have a provider name, show enhanced message
+        if (isExtractionError && providerName) {
+            errorMessage = `
+                <div class="mb-2">
+                    <strong>Unable to process invoice for ${providerName}.</strong>
+                </div>
+                <div class="mb-2">
+                    ${message}
+                </div>
+                <div class="mt-3">
+                    <strong>Possible reasons:</strong>
+                    <ul class="mb-0 mt-2">
+                        <li>You may have selected the wrong provider for this PDF</li>
+                        <li>The invoice format may have been changed by ${providerName}</li>
+                        <li>The PDF may be a scanned image (not text-searchable)</li>
+                    </ul>
+                </div>
+            `;
+        } else if (providerName) {
+            // For other errors, still mention the provider if available
+            errorMessage = `
+                <div class="mb-2">
+                    <strong>Error processing invoice for ${providerName}:</strong>
+                </div>
+                <div>${message}</div>
+            `;
+        }
+        
+        uploadAlert.innerHTML = errorMessage;
+        uploadAlert.classList.remove('d-none', 'alert-success');
+        uploadAlert.classList.add('alert-danger');
+    }
     });
     
     // Reset form when modal is closed

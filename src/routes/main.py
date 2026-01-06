@@ -125,7 +125,21 @@ def upload_invoice():
             }), 400
         
         # Extract invoice data once
-        extracted = provider.extract(temp_path)
+        try:
+            extracted = provider.extract(temp_path)
+        except Exception as e:
+            logger.error(f"Error extracting invoice data: {str(e)}", exc_info=True)
+            # Clean up temp file
+            try:
+                os.remove(temp_path)
+            except:
+                pass
+            return jsonify({
+                'success': False,
+                'message': 'Unable to extract data from the invoice PDF.',
+                'provider_name': provider_name,
+                'is_extraction_error': True
+            }), 400
         
         # Process invoice
         invoice_service = InvoiceService()
@@ -159,13 +173,15 @@ def upload_invoice():
         logger.error(f"ValueError in upload_invoice: {str(e)}", exc_info=True)
         return jsonify({
             'success': False,
-            'message': f'Processing error: {str(e)}'
+            'message': f'Processing error: {str(e)}',
+            'provider_name': provider_name
         }), 400
     except Exception as e:
         logger.error(f"Unexpected error in upload_invoice: {str(e)}", exc_info=True)
         return jsonify({
             'success': False,
-            'message': f'Unexpected error: {str(e)}'
+            'message': f'Unexpected error: {str(e)}',
+            'provider_name': provider_name
         }), 500
 
 @main_bp.route('/invoice/<invoice_id>')
