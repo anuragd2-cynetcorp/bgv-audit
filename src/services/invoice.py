@@ -1,7 +1,7 @@
 """
 Service for invoice processing and management.
 """
-from typing import Dict, List, Optional
+from typing import Dict, List
 from src.models import Invoice
 from src.services.base import BaseService
 from src.providers.base import ExtractedInvoice, append_timestamp_to_invoice_number
@@ -78,73 +78,20 @@ class InvoiceService(BaseService[Invoice]):
         # FireO query example - adjust based on your FireO version
         return Invoice.db().filter('uploaded_by', '==', user_email).fetch()
     
-    def list_invoices_filtered(self, user_email: str, 
-                                 statuses: Optional[List[str]] = None, 
-                                 providers: Optional[List[str]] = None) -> List[Invoice]:
-        """
-        List all invoices matching the filters (no pagination).
-        Supports multiselect filtering by audit status and provider name using Firestore's 'in' operator.
-        
-        Args:
-            user_email: User's email address
-            statuses: Optional list of audit statuses to filter by ("PASS", "FAIL", "PENDING")
-            providers: Optional list of provider names to filter by
-            
-        Returns:
-            List of Invoice instances
-        """
-        # Base query: filter by user
-        query = Invoice.db().filter('uploaded_by', '==', user_email)
-        
-        # Apply status filter if provided (multiselect using 'in' operator)
-        if statuses and len(statuses) > 0:
-            # Filter out empty strings
-            statuses = [s.strip() for s in statuses if s and s.strip()]
-            if statuses:
-                query = query.filter('audit_status', 'in', statuses)
-        
-        # Apply provider filter if provided (multiselect using 'in' operator)
-        if providers and len(providers) > 0:
-            # Filter out empty strings
-            providers = [p.strip() for p in providers if p and p.strip()]
-            if providers:
-                query = query.filter('provider_name', 'in', providers)
-        
-        # Fetch all matching results
-        return list(query.fetch())
-    
-    def list_invoices_paginated(self, user_email: str, page: int = 1, per_page: int = 10, 
-                                 statuses: Optional[List[str]] = None, providers: Optional[List[str]] = None) -> Dict:
+    def list_invoices_paginated(self, user_email: str, page: int = 1, per_page: int = 10) -> Dict:
         """
         List invoices with pagination using the reusable Paginator utility.
-        Supports multiselect filtering by audit status and provider name using Firestore's 'in' operator.
         
         Args:
             user_email: User's email address
             page: Page number (1-indexed)
             per_page: Number of records per page
-            statuses: Optional list of audit statuses to filter by ("PASS", "FAIL", "PENDING")
-            providers: Optional list of provider names to filter by
             
         Returns:
             Dictionary with 'invoices' (list), 'total' (int), 'page' (int), 'per_page' (int), 'total_pages' (int)
         """
         # Base query: filter by user
         query = Invoice.db().filter('uploaded_by', '==', user_email)
-        
-        # Apply status filter if provided (multiselect using 'in' operator)
-        if statuses and len(statuses) > 0:
-            # Filter out empty strings
-            statuses = [s.strip() for s in statuses if s and s.strip()]
-            if statuses:
-                query = query.filter('audit_status', 'in', statuses)
-        
-        # Apply provider filter if provided (multiselect using 'in' operator)
-        if providers and len(providers) > 0:
-            # Filter out empty strings
-            providers = [p.strip() for p in providers if p and p.strip()]
-            if providers:
-                query = query.filter('provider_name', 'in', providers)
         
         # Use Paginator utility
         pagination_result = Paginator.paginate(query, page=page, per_page=per_page)

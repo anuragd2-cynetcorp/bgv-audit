@@ -58,135 +58,6 @@
     </div>
 </div>
 
-<!-- Filters Container -->
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card shadow-sm mb-3">
-            <div class="card-header bg-white">
-                <div class="d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">
-                        <i class="bi bi-funnel me-2"></i>Filters
-                    </h5>
-                    {% if current_statuses or current_providers %}
-                    <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm btn-outline-secondary">
-                        <i class="bi bi-x-circle me-1"></i>Clear All
-                    </a>
-                    {% endif %}
-                </div>
-            </div>
-            <div class="card-body">
-                <form method="GET" action="{{ url_for('main.dashboard') }}" id="filterForm">
-                    <div class="row g-4">
-                        <!-- Status Filter -->
-                        <div class="col-lg-4">
-                            <label class="form-label fw-semibold mb-2 d-block">Status</label>
-                            <div class="dropdown">
-                                <button class="btn btn-outline-secondary dropdown-toggle w-100 text-start" type="button" id="statusDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                                    <span id="statusPlaceholder">Select Status</span>
-                                </button>
-                                <ul class="dropdown-menu w-100" aria-labelledby="statusDropdown">
-                                    <li>
-                                        <a class="dropdown-item" href="#" data-value="PASS">
-                                            <div class="form-check">
-                                                <input class="form-check-input status-checkbox" type="checkbox" value="PASS" id="status-pass" {% if 'PASS' in current_statuses %}checked{% endif %}>
-                                                <label class="form-check-label w-100" for="status-pass">
-                                                    <span class="badge bg-success">PASS</span>
-                                                </label>
-                                            </div>
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a class="dropdown-item" href="#" data-value="FAIL">
-                                            <div class="form-check">
-                                                <input class="form-check-input status-checkbox" type="checkbox" value="FAIL" id="status-fail" {% if 'FAIL' in current_statuses %}checked{% endif %}>
-                                                <label class="form-check-label w-100" for="status-fail">
-                                                    <span class="badge bg-danger">FAIL</span>
-                                                </label>
-                                            </div>
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a class="dropdown-item" href="#" data-value="PENDING">
-                                            <div class="form-check">
-                                                <input class="form-check-input status-checkbox" type="checkbox" value="PENDING" id="status-pending" {% if 'PENDING' in current_statuses %}checked{% endif %}>
-                                                <label class="form-check-label w-100" for="status-pending">
-                                                    <span class="badge bg-warning text-dark">PENDING</span>
-                                                </label>
-                                            </div>
-                                        </a>
-                                    </li>
-                                </ul>
-                            </div>
-                            <!-- Selected Status Tags -->
-                            <div id="statusTags" class="mt-2 d-flex flex-wrap gap-2">
-                                {% if current_statuses %}
-                                    {% for status in current_statuses %}
-                                    <span class="badge bg-{% if status == 'PASS' %}success{% elif status == 'FAIL' %}danger{% else %}warning text-dark{% endif %} d-flex align-items-center gap-1 status-tag" data-value="{{ status }}">
-                                        {{ status }}
-                                        <button type="button" class="btn-close btn-close-white" aria-label="Remove"></button>
-                                    </span>
-                                    {% endfor %}
-                                {% endif %}
-                            </div>
-                        </div>
-                        
-                        <!-- Provider Filter -->
-                        <div class="col-lg-8">
-                            <label class="form-label fw-semibold mb-2 d-block">Provider</label>
-                            <div class="dropdown">
-                                <button class="btn btn-outline-secondary dropdown-toggle w-100 text-start" type="button" id="providerDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                                    <span id="providerPlaceholder">Select Provider</span>
-                                </button>
-                                <ul class="dropdown-menu w-100" aria-labelledby="providerDropdown">
-                                    {% if providers %}
-                                        {% for provider in providers %}
-                                        <li>
-                                            <a class="dropdown-item" href="#" data-value="{{ provider }}">
-                                                <div class="form-check">
-                                                    <input class="form-check-input provider-checkbox" type="checkbox" value="{{ provider }}" id="provider-{{ loop.index }}" {% if provider in current_providers %}checked{% endif %}>
-                                                    <label class="form-check-label w-100" for="provider-{{ loop.index }}">
-                                                        {{ provider }}
-                                                    </label>
-                                                </div>
-                                            </a>
-                                        </li>
-                                        {% endfor %}
-                                    {% endif %}
-                                </ul>
-                            </div>
-                            <!-- Selected Provider Tags -->
-                            <div id="providerTags" class="mt-2 d-flex flex-wrap gap-2">
-                                {% if current_providers %}
-                                    {% for provider in current_providers %}
-                                    <span class="badge bg-primary d-flex align-items-center gap-1 provider-tag" data-value="{{ provider }}">
-                                        {{ provider }}
-                                        <button type="button" class="btn-close btn-close-white" aria-label="Remove"></button>
-                                    </span>
-                                    {% endfor %}
-                                {% endif %}
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Hidden inputs for form submission -->
-                    <div id="hiddenInputs"></div>
-                    
-                    <!-- Action Button -->
-                    <div class="row mt-4">
-                        <div class="col-12">
-                            <div class="d-flex justify-content-end">
-                                <button type="submit" class="btn btn-primary px-4">
-                                    <i class="bi bi-funnel-fill me-2"></i>Apply Filters
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
 <!-- Invoices List -->
 <div class="row">
     <div class="col-12">
@@ -250,30 +121,17 @@
                     <div class="d-flex justify-content-end align-items-center mt-3 gap-3">
                         <!-- Pagination Info (Right Aligned) -->
                         <div class="text-muted small">
-                            {% if has_filters %}
-                                Showing {{ invoices|length }} filtered invoice{{ 's' if invoices|length != 1 else '' }}
-                            {% else %}
-                                Showing {{ ((pagination.page - 1) * pagination.per_page) + 1 }} to {{ ((pagination.page - 1) * pagination.per_page) + invoices|length }} of {{ pagination.total }} invoices
-                            {% endif %}
+                            Showing {{ ((pagination.page - 1) * pagination.per_page) + 1 }} to {{ ((pagination.page - 1) * pagination.per_page) + invoices|length }} of {{ pagination.total }} invoices
                         </div>
                         
-                        <!-- Pagination Controls (Right Aligned) - Only show when no filters are active -->
-                        {% if not has_filters and pagination.total_pages > 1 %}
+                        <!-- Pagination Controls (Right Aligned) -->
+                        {% if pagination.total_pages > 1 %}
                         <nav aria-label="Invoice pagination">
                             <ul class="pagination mb-0">
-                            <!-- Build filter query string -->
-                            {% set filter_params = '' %}
-                            {% for status in current_statuses %}
-                                {% set filter_params = filter_params + '&status=' + status %}
-                            {% endfor %}
-                            {% for provider in current_providers %}
-                                {% set filter_params = filter_params + '&provider=' + provider %}
-                            {% endfor %}
-                            
                             <!-- Previous Button -->
                             <li class="page-item {% if pagination.page <= 1 %}disabled{% endif %}">
                                 <a class="page-link" 
-                                   href="?page={{ pagination.page - 1 }}{{ filter_params }}"
+                                   href="?page={{ pagination.page - 1 }}"
                                    {% if pagination.page <= 1 %}tabindex="-1" aria-disabled="true"{% endif %}>
                                     <i class="bi bi-chevron-left"></i> Previous
                                 </a>
@@ -285,7 +143,7 @@
                             
                             {% if start_page > 1 %}
                             <li class="page-item">
-                                <a class="page-link" href="?page=1{{ filter_params }}">1</a>
+                                <a class="page-link" href="?page=1">1</a>
                             </li>
                             {% if start_page > 2 %}
                             <li class="page-item disabled">
@@ -296,7 +154,7 @@
                             
                             {% for p in range(start_page, end_page + 1) %}
                             <li class="page-item {% if p == pagination.page %}active{% endif %}">
-                                <a class="page-link" href="?page={{ p }}{{ filter_params }}">{{ p }}</a>
+                                <a class="page-link" href="?page={{ p }}">{{ p }}</a>
                             </li>
                             {% endfor %}
                             
@@ -307,14 +165,14 @@
                             </li>
                             {% endif %}
                             <li class="page-item">
-                                <a class="page-link" href="?page={{ pagination.total_pages }}{{ filter_params }}">{{ pagination.total_pages }}</a>
+                                <a class="page-link" href="?page={{ pagination.total_pages }}">{{ pagination.total_pages }}</a>
                             </li>
                             {% endif %}
                             
                             <!-- Next Button -->
                             <li class="page-item {% if pagination.page >= pagination.total_pages %}disabled{% endif %}">
                                 <a class="page-link" 
-                                   href="?page={{ pagination.page + 1 }}{{ filter_params }}"
+                                   href="?page={{ pagination.page + 1 }}"
                                    {% if pagination.page >= pagination.total_pages %}tabindex="-1" aria-disabled="true"{% endif %}>
                                     Next <i class="bi bi-chevron-right"></i>
                                 </a>

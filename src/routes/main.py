@@ -40,39 +40,13 @@ def dashboard():
     except (ValueError, TypeError):
         page = 1
     
-    # Get filter parameters (multiselect - can have multiple values)
-    statuses = request.args.getlist('status') or None
-    selected_providers = request.args.getlist('provider') or None
-    
-    # Check if filters are active
-    has_filters = (statuses and len(statuses) > 0) or (selected_providers and len(selected_providers) > 0)
-    
     try:
-        if has_filters:
-            # When filters are active, show all results without pagination
-            invoices = invoice_service.list_invoices_filtered(
-                user_email=user_email,
-                statuses=statuses,
-                providers=selected_providers
-            )
-            # Create pagination data structure for template compatibility
-            pagination_data = {
-                'invoices': invoices,
-                'total': len(invoices),
-                'page': 1,
-                'per_page': len(invoices),
-                'total_pages': 1
-            }
-        else:
-            # No filters: use paginated method
-            pagination_data = invoice_service.list_invoices_paginated(
-                user_email=user_email,
-                page=page,
-                per_page=10,
-                statuses=statuses,
-                providers=selected_providers
-            )
-            invoices = pagination_data['invoices']
+        pagination_data = invoice_service.list_invoices_paginated(
+            user_email=user_email,
+            page=page,
+            per_page=10
+        )
+        invoices = pagination_data['invoices']
     except Exception as e:
         logger.error(f"Error fetching invoices: {e}", exc_info=True)
         invoices = []
@@ -91,10 +65,7 @@ def dashboard():
                         user=session['user'],
                         invoices=invoices,
                         providers=all_providers,
-                        pagination=pagination_data,
-                        current_statuses=statuses or [],
-                        current_providers=selected_providers or [],
-                        has_filters=has_filters)
+                        pagination=pagination_data)
 
 @main_bp.route('/upload', methods=['POST'])
 @login_required
