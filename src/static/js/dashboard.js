@@ -28,7 +28,11 @@ document.addEventListener('DOMContentLoaded', function() {
         // Hide any previous alerts
         if (uploadAlert) {
             uploadAlert.classList.add('d-none');
-            uploadAlert.classList.remove('alert-success', 'alert-danger');
+            uploadAlert.classList.remove('alert-success', 'alert-danger', 'show');
+            const alertContent = document.getElementById('uploadAlertContent');
+            if (alertContent) {
+                alertContent.innerHTML = '';
+            }
         }
         
         // Close modal immediately
@@ -136,6 +140,9 @@ document.addEventListener('DOMContentLoaded', function() {
     function showErrorInModal(message, providerName, isExtractionError) {
         if (!uploadAlert) return;
         
+        const alertContent = document.getElementById('uploadAlertContent');
+        if (!alertContent) return;
+        
         let errorMessage = message;
         
         // If it's an extraction error and we have a provider name, show enhanced message
@@ -166,9 +173,9 @@ document.addEventListener('DOMContentLoaded', function() {
             `;
         }
         
-        uploadAlert.innerHTML = errorMessage;
+        alertContent.innerHTML = errorMessage;
         uploadAlert.classList.remove('d-none', 'alert-success');
-        uploadAlert.classList.add('alert-danger');
+        uploadAlert.classList.add('alert-danger', 'show');
     }
     });
     
@@ -178,7 +185,11 @@ document.addEventListener('DOMContentLoaded', function() {
             uploadForm.reset();
             if (uploadAlert) {
                 uploadAlert.classList.add('d-none');
-                uploadAlert.classList.remove('alert-success', 'alert-danger');
+                uploadAlert.classList.remove('alert-success', 'alert-danger', 'show');
+                const alertContent = document.getElementById('uploadAlertContent');
+                if (alertContent) {
+                    alertContent.innerHTML = '';
+                }
             }
             if (submitBtn) submitBtn.disabled = false;
             if (cancelBtn) cancelBtn.disabled = false;

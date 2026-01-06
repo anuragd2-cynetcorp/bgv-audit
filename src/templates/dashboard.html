@@ -27,7 +27,10 @@
             <form id="uploadForm" enctype="multipart/form-data" data-upload-url="{{ url_for('main.upload_invoice') }}">
                 <div class="modal-body">
                     <!-- Alert container for messages -->
-                    <div id="uploadAlert" class="alert d-none" role="alert"></div>
+                    <div id="uploadAlert" class="alert alert-dismissible fade d-none" role="alert">
+                        <div id="uploadAlertContent"></div>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
                     
                     <div class="mb-3">
                         <label for="file" class="form-label">Select PDF File</label>
