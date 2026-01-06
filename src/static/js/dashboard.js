@@ -25,6 +25,17 @@ document.addEventListener('DOMContentLoaded', function() {
     uploadForm.addEventListener('submit', function(e) {
         e.preventDefault();
         
+        // Disable submit and cancel buttons to prevent multiple submissions
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Processing...';
+            submitBtn.dataset.originalText = originalText;
+        }
+        if (cancelBtn) {
+            cancelBtn.disabled = true;
+        }
+        
         // Hide any previous alerts
         if (uploadAlert) {
             uploadAlert.classList.add('d-none');
@@ -102,6 +113,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (fullPageLoader) {
                     fullPageLoader.classList.add('d-none');
                 }
+                // Re-enable buttons on error
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = submitBtn.dataset.originalText || '<i class="bi bi-upload me-2"></i>Upload & Process';
+                }
+                if (cancelBtn) {
+                    cancelBtn.disabled = false;
+                }
                 showErrorInModal(data.message || 'An error occurred while processing the invoice.', data.provider_name, data.is_extraction_error);
                 // Reopen modal to show error
                 if (modal) {
@@ -113,6 +132,15 @@ document.addEventListener('DOMContentLoaded', function() {
             // Hide full-page loader
             if (fullPageLoader) {
                 fullPageLoader.classList.add('d-none');
+            }
+            
+            // Re-enable buttons on error
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = submitBtn.dataset.originalText || '<i class="bi bi-upload me-2"></i>Upload & Process';
+            }
+            if (cancelBtn) {
+                cancelBtn.disabled = false;
             }
             
             // Get provider name from error object or form
