@@ -152,7 +152,7 @@ def upload_invoice():
             'message': f'Invoice {invoice.invoice_number} processed successfully. Status: {audit_report.overall_status}',
             'invoice_number': invoice.invoice_number,
             'audit_status': audit_report.overall_status,
-            'redirect_url': url_for('main.view_invoice', invoice_number=invoice.invoice_number)
+            'redirect_url': url_for('main.view_invoice', invoice_id=invoice.id)
         }), 200
     
     except ValueError as e:
@@ -168,14 +168,14 @@ def upload_invoice():
             'message': f'Unexpected error: {str(e)}'
         }), 500
 
-@main_bp.route('/invoice/<invoice_number>')
+@main_bp.route('/invoice/<invoice_id>')
 @login_required
-def view_invoice(invoice_number):
+def view_invoice(invoice_id):
     """
     View invoice details and audit results.
     """
     invoice_service = InvoiceService()
-    invoice = invoice_service.get_by_id(invoice_number)
+    invoice = invoice_service.get_by_id(invoice_id)
     
     if not invoice:
         flash('Invoice not found', 'error')
