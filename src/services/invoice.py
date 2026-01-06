@@ -1,7 +1,7 @@
 """
 Service for invoice processing and management.
 """
-from typing import Dict, List
+from typing import Dict, List, Optional
 from src.models import Invoice
 from src.services.base import BaseService
 from src.providers.base import ExtractedInvoice, append_timestamp_to_invoice_number
