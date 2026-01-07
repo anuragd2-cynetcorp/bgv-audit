@@ -239,49 +239,56 @@ class BaseProvider(ABC):
         with pdfplumber.open(pdf_path) as pdf:
             return pdf.pages
     
-    def _extract_with_ocr(self, pdf_path: str) -> List[ExtractedLineItem]:
+    def _get_text_lines(self, pdf_path: str, use_ocr: bool = False) -> List[str]:
         """
-        Extract line items using OCR when text extraction fails.
-        Converts PDF pages to images, runs OCR, and calls provider-specific parsing.
+        Extract text lines from PDF.
         
         Args:
             pdf_path: Path to the PDF file
+            use_ocr: If True, use OCR. If False, use normal text extraction.
             
         Returns:
-            List of ExtractedLineItem objects
-            
-        Raises:
-            ValueError: If OCR fails
+            List of text lines extracted from the PDF
         """
-        try:
-            # Convert PDF pages to images
-            images = convert_from_path(pdf_path, dpi=300)
-            
-            all_lines = []
-            # Process each page with OCR
-            for page_num, image in enumerate(images):
-                # Run OCR on the image
-                ocr_text = pytesseract.image_to_string(image, config='--psm 6')
-                
-                if ocr_text:
-                    # Split into lines and add to collection
-                    page_lines = [line.strip() for line in ocr_text.split('\n') if line.strip()]
-                    all_lines.extend(page_lines)
-            
-            # Call provider-specific parsing method
-            return self._parse_ocr_text_lines(all_lines)
+        all_lines = []
         
-        except Exception as e:
-            logger.error(f"Error during OCR extraction: {str(e)}", exc_info=True)
-            raise ValueError(f"OCR extraction failed: {str(e)}")
+        if use_ocr:
+            # Use OCR extraction
+            logger.info(f"Using OCR extraction for {self.name} invoice.")
+            try:
+                # Convert PDF pages to images
+                images = convert_from_path(pdf_path, dpi=300)
+                
+                # Process each page with OCR
+                for page_num, image in enumerate(images):
+                    # Run OCR on the image
+                    ocr_text = pytesseract.image_to_string(image, config='--psm 6')
+                    
+                    if ocr_text:
+                        # Split into lines and add to collection
+                        page_lines = [line.strip() for line in ocr_text.split('\n') if line.strip()]
+                        all_lines.extend(page_lines)
+            except Exception as e:
+                logger.error(f"Error during OCR extraction: {str(e)}", exc_info=True)
+                raise ValueError(f"OCR extraction failed: {str(e)}")
+        else:
+            # Use normal text extraction
+            with pdfplumber.open(pdf_path) as pdf:
+                for page in pdf.pages:
+                    text = page.extract_text(layout=True)
+                    if text:
+                        page_lines = [line.strip() for line in text.split('\n') if line.strip()]
+                        all_lines.extend(page_lines)
+        
+        return all_lines
     
-    def _parse_ocr_text_lines(self, lines: List[str]) -> List[ExtractedLineItem]:
+    @abstractmethod
+    def _parse_text_lines(self, lines: List[str]) -> List[ExtractedLineItem]:
         """
-        Parse OCR'd text lines into line items. Must be implemented by child classes
-        that want to use OCR fallback.
+        Parse text lines into line items. Must be implemented by child classes.
         
         Args:
-            lines: List of text lines from OCR
+            lines: List of text lines to parse
             
         Returns:
             List of ExtractedLineItem objects
@@ -289,5 +296,5 @@ class BaseProvider(ABC):
         Raises:
             NotImplementedError: If not implemented by child class
         """
-        raise NotImplementedError("Child class must implement _parse_ocr_text_lines if using OCR fallback")
+        raise NotImplementedError("Child class must implement _parse_text_lines")
 

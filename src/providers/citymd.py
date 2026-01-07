@@ -5,6 +5,9 @@ import re
 import pdfplumber
 from typing import List
 from .base import BaseProvider, ExtractedInvoice, ExtractedLineItem
+from src.logger import get_logger
+
+logger = get_logger()
 
 
 class CityMDProvider(BaseProvider):
@@ -57,75 +60,22 @@ class CityMDProvider(BaseProvider):
             if total_match:
                 grand_total = float(total_match.group(1).replace(',', ''))
 
-            # 2. Extract Line Items (Iterate all pages)
-            for page in pdf.pages:
-                text = page.extract_text()
-                if not text:
-                    continue
-                
-                lines = text.split('\n')
-                
-                for line in lines:
-                    line = line.strip()
-                    
-                    # --- State Change: Patient Header ---
-                    # Pattern: "Patient:" followed by name, then "Patient ID:" followed by ID
-                    # Regex: Patient: (Name) Patient ID: (ID)
-                    pat_match = re.search(r'Patient:\s*(.+?)\s+Patient ID:\s*(\d+)', line)
-                    if pat_match:
-                        current_candidate_name = pat_match.group(1).strip()
-                        current_candidate_id = pat_match.group(2).strip()
-                        continue
-                    
-                    # --- Extract Service Line ---
-                    # Only process if we have a valid patient context
-                    if current_candidate_name:
-                        # Pattern: Date | (Optional Code) | Description | Amount (can be negative)
-                        # Check if line starts with a date to filter out headers/subtotals
-                        if not re.match(r'^\d{2}/\d{2}/\d{4}', line):
-                            continue
-                        
-                        # Try pattern with procedure code first (handles negative amounts)
-                        item_match = re.match(r'^(\d{2}/\d{2}/\d{4})\s+([A-Z0-9,]+)\s+(.+?)\s+(-?)\$([\d,]+\.\d{2})$', line)
-                        proc_code = None
-                        
-                        if item_match:
-                            date_str = item_match.group(1)
-                            proc_code = item_match.group(2)
-                            description = item_match.group(3).strip()
-                            minus_sign = item_match.group(4)
-                            amount_str = item_match.group(5).replace(',', '')
-                            amount = float(amount_str)
-                            if minus_sign == '-':
-                                amount = -amount
-                        else:
-                            # Try pattern without procedure code (handles negative amounts)
-                            item_match = re.match(r'^(\d{2}/\d{2}/\d{4})\s+(.+?)\s+(-?)\$([\d,]+\.\d{2})$', line)
-                            if item_match:
-                                date_str = item_match.group(1)
-                                description = item_match.group(2).strip()
-                                minus_sign = item_match.group(3)
-                                amount_str = item_match.group(4).replace(',', '')
-                                amount = float(amount_str)
-                                if minus_sign == '-':
-                                    amount = -amount
-                            else:
-                                continue
-                        
-                        metadata = {}
-                        if proc_code:
-                            metadata["procedure_code"] = proc_code
-                        
-                        item = ExtractedLineItem(
-                            service_date=date_str,
-                            candidate_id=current_candidate_id,
-                            candidate_name=current_candidate_name,
-                            amount=amount,
-                            service_description=description,
-                            metadata=metadata
-                        )
-                        line_items.append(item)
-
+            # 2. Extract Line Items
+            # Try normal text extraction first
+            lines = self._get_text_lines(pdf_path, use_ocr=False)
+            line_items = self._parse_text_lines(lines)
+            
+            # If no line items found, try OCR fallback
+            if not line_items:
+                logger.info("No line items found with text extraction. Attempting OCR fallback for CityMD invoice.")
+                try:
+                    lines = self._get_text_lines(pdf_path, use_ocr=True)
+                    line_items = self._parse_text_lines(lines)
+                    logger.info(f"OCR extraction found {len(line_items)} line items.")
+                except Exception as e:
+                    logger.error(f"OCR extraction failed: {str(e)}", exc_info=True)
+                    # Continue to raise the original error if OCR also fails
+        
         if not line_items:
             raise ValueError("Could not extract line items from invoice. Format may have changed.")
             
@@ -139,4 +89,81 @@ class CityMDProvider(BaseProvider):
             line_items=line_items,
             grand_total=grand_total
         )
+    
+    def _parse_text_lines(self, lines: List[str]) -> List[ExtractedLineItem]:
+        """
+        Parse text lines into line items using CityMD-specific logic.
+        Applies patient header and service line parsing strategy.
+        
+        Args:
+            lines: List of text lines to parse
+            
+        Returns:
+            List of ExtractedLineItem objects
+        """
+        line_items = []
+        
+        # State variables
+        current_candidate_name = None
+        current_candidate_id = None
+        
+        for line in lines:
+            # --- State Change: Patient Header ---
+            # Pattern: "Patient:" followed by name, then "Patient ID:" followed by ID
+            pat_match = re.search(r'Patient:\s*(.+?)\s+Patient ID:\s*(\d+)', line)
+            if pat_match:
+                current_candidate_name = pat_match.group(1).strip()
+                current_candidate_id = pat_match.group(2).strip()
+                continue
+            
+            # --- Extract Service Line ---
+            # Only process if we have a valid patient context
+            if current_candidate_name:
+                # Pattern: Date | (Optional Code) | Description | Amount (can be negative)
+                # Check if line starts with a date to filter out headers/subtotals
+                if not re.match(r'^\d{2}/\d{2}/\d{4}', line):
+                    continue
+                
+                # Try pattern with procedure code first (handles negative amounts)
+                item_match = re.match(r'^(\d{2}/\d{2}/\d{4})\s+([A-Z0-9,]+)\s+(.+?)\s+(-?)\$([\d,]+\.\d{2})$', line)
+                proc_code = None
+                
+                if item_match:
+                    date_str = item_match.group(1)
+                    proc_code = item_match.group(2)
+                    description = item_match.group(3).strip()
+                    minus_sign = item_match.group(4)
+                    amount_str = item_match.group(5).replace(',', '')
+                    amount = float(amount_str)
+                    if minus_sign == '-':
+                        amount = -amount
+                else:
+                    # Try pattern without procedure code (handles negative amounts)
+                    item_match = re.match(r'^(\d{2}/\d{2}/\d{4})\s+(.+?)\s+(-?)\$([\d,]+\.\d{2})$', line)
+                    if item_match:
+                        date_str = item_match.group(1)
+                        description = item_match.group(2).strip()
+                        minus_sign = item_match.group(3)
+                        amount_str = item_match.group(4).replace(',', '')
+                        amount = float(amount_str)
+                        if minus_sign == '-':
+                            amount = -amount
+                    else:
+                        continue
+                
+                metadata = {}
+                if proc_code:
+                    metadata["procedure_code"] = proc_code
+                
+                item = ExtractedLineItem(
+                    service_date=date_str,
+                    candidate_id=current_candidate_id,
+                    candidate_name=current_candidate_name,
+                    amount=amount,
+                    service_description=description,
+                    metadata=metadata
+                )
+                line_items.append(item)
+        
+        return line_items
 
