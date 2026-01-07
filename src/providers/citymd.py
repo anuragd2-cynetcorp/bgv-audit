@@ -94,7 +94,6 @@ class CityMDProvider(BaseProvider):
                             proc_code = item_match.group(2)
                             description = item_match.group(3).strip()
                             amount = float(item_match.group(4).replace(',', ''))
-                            print(f"candidate name: {current_candidate_name} description: {description} amount: {amount}")
                             item = ExtractedLineItem(
                                 service_date=date_str,
                                 candidate_id=current_candidate_id,
