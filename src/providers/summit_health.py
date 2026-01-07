@@ -91,13 +91,15 @@ class SummitHealthProvider(BaseProvider):
                         if not re.match(r'^\d{2}/\d{2}/\d{4}', line):
                             continue
                             
-                        item_match = re.match(r'^(\d{2}/\d{2}/\d{4})\s+(\w+)\s+(.+?)\s+\$([\d,]+\.\d{2})$', line)
+                        # Updated regex to allow commas in procedure code
+                        item_match = re.match(r'^(\d{2}/\d{2}/\d{4})\s+([A-Z0-9,]+)\s+(.+?)\s+\$([\d,]+\.\d{2})$', line)
                         
                         if item_match:
                             date_str = item_match.group(1)
                             proc_code = item_match.group(2)
                             description = item_match.group(3).strip()
                             amount = float(item_match.group(4).replace(',', ''))
+                            print(f"Date: {date_str}, Procedure Code: {proc_code}, Description: {description}, Amount: {amount}")
                             item = ExtractedLineItem(
                                 service_date=date_str,
                                 candidate_id=current_candidate_id,
