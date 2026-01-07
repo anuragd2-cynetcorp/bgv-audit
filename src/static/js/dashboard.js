@@ -140,11 +140,15 @@ document.addEventListener('DOMContentLoaded', function() {
                             backdrop.remove();
                         }
                         
-                        // Set error message right before showing modal
-                        showErrorInModal(errorMessage, data.provider_name, data.is_extraction_error);
-                        
-                        // Now show the modal with error
+                        // Show the modal first
                         errorModal.show();
+                        
+                        // Set error message after modal is fully shown
+                        uploadModal.addEventListener('shown.bs.modal', function showErrorAfterModal() {
+                            showErrorInModal(errorMessage, data.provider_name, data.is_extraction_error);
+                            // Remove listener after use
+                            uploadModal.removeEventListener('shown.bs.modal', showErrorAfterModal);
+                        }, { once: true });
                     }, 300);
                 }
             }
@@ -202,14 +206,19 @@ document.addEventListener('DOMContentLoaded', function() {
                         backdrop.remove();
                     }
                     
-                    // Set error message right before showing modal
-                    showErrorInModal(errorMessage, providerName, isExtractionError);
-                    
-                    // Now show the modal with error
+                    // Show the modal first
                     errorModal.show();
+                    
+                    // Set error message after modal is fully shown
+                    uploadModal.addEventListener('shown.bs.modal', function showErrorAfterModal() {
+                        showErrorInModal(errorMessage, providerName, isExtractionError);
+                        // Remove listener after use
+                        uploadModal.removeEventListener('shown.bs.modal', showErrorAfterModal);
+                    }, { once: true });
                 }, 300);
             }
-        });
+        }); // End of fetch promise chain
+    }); // End of submit event listener
     
     // Function to show error message in modal alert
     function showErrorInModal(message, providerName, isExtractionError) {
@@ -266,10 +275,15 @@ document.addEventListener('DOMContentLoaded', function() {
             alertContent.innerHTML = '';
         }
     }
-    });
     
-    // Reset form when modal is closed
+    // Hide alert when modal is opened normally (user clicks upload button)
     if (uploadModal) {
+        uploadModal.addEventListener('show.bs.modal', function() {
+            // Hide alert when modal opens (unless we're about to show an error)
+            // We'll show it explicitly if there's an error
+            hideErrorInModal();
+        });
+        
         uploadModal.addEventListener('hidden.bs.modal', function() {
             uploadForm.reset();
             hideErrorInModal();
