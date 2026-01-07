@@ -9,6 +9,7 @@ services:
     volumes:
       - ./src:/app/src
       - ./firebase_auth.json:/app/firebase_auth.json
+      - ./pdfs:/app/pdfs
     env_file:
       - .env
     command: python -m src.app
