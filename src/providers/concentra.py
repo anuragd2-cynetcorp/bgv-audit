@@ -87,6 +87,7 @@ class ConcentraProvider(BaseProvider):
         """
         Parse text lines into line items using Concentra-specific logic.
         Uses SSN-based parsing strategy to extract line items.
+        Handles multi-line descriptions and flexible amount formats.
         
         Args:
             lines: List of text lines to parse
@@ -96,55 +97,135 @@ class ConcentraProvider(BaseProvider):
         """
         line_items = []
         
-        for line in lines:
+        # Pattern for SSN (XXX-XX-####) - can vary slightly with OCR
+        ssn_pattern = re.compile(r'XXX-XX-\d{4}|XXX[-\s]XX[-\s]\d{4}', re.IGNORECASE)
+        date_pattern = re.compile(r'^\s*(\d{1,2}/\d{1,2}/\d{4})')
+        
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
+            
+            if not line:
+                i += 1
+                continue
+            
             # --- Anchor Strategy: Find the SSN ---
             # Concentra always puts masked SSN (XXX-XX-####) in the middle of the line
-            ssn_match = re.search(r'(XXX-XX-\d{4})', line)
+            ssn_match = ssn_pattern.search(line)
             
-            if ssn_match:
-                # Split the line into two parts: Before SSN and After SSN
-                pre_ssn = line[:ssn_match.start()]
-                post_ssn = line[ssn_match.end():]
+            if not ssn_match:
+                i += 1
+                continue
+            
+            # Split the line into two parts: Before SSN and After SSN
+            pre_ssn = line[:ssn_match.start()]
+            post_ssn = line[ssn_match.end():]
+            
+            candidate_id = ssn_match.group(0).upper().replace(' ', '-')  # Normalize SSN format
+            
+            # --- Parse Left Side (Date + Name) ---
+            # Look for Date at the start (more flexible pattern)
+            date_match = date_pattern.match(pre_ssn)
+            
+            if not date_match:
+                i += 1
+                continue
+            
+            service_date = date_match.group(1)
+            # Normalize date format (ensure consistent format)
+            date_parts = service_date.split('/')
+            if len(date_parts) == 3:
+                month, day, year = date_parts
+                service_date = f"{month.zfill(2)}/{day.zfill(2)}/{year}"
+            
+            # Optimized: Use SSN as name (name not used for fingerprinting)
+            candidate_name = candidate_id
+            
+            # --- Parse Right Side (Description + Amount) ---
+            # Try multiple patterns for amount extraction
+            
+            # Pattern 1: Amount at the end with $ sign
+            amount_match = re.search(r'\$([\d,]+\.\d{2})\s*$', post_ssn)
+            
+            # Pattern 2: Amount at the end without $ sign
+            if not amount_match:
+                amount_match = re.search(r'([\d,]+\.\d{2})\s*$', post_ssn)
+            
+            # Pattern 3: Amount anywhere near the end (last 20 chars)
+            if not amount_match:
+                end_portion = post_ssn[-30:] if len(post_ssn) > 30 else post_ssn
+                amount_matches = list(re.finditer(r'[\$]?([\d,]+\.\d{2})', end_portion))
+                if amount_matches:
+                    amount_match = amount_matches[-1]  # Use last match (most likely to be total)
+            
+            # Check for multi-line description
+            merged_post_ssn = post_ssn
+            next_i = i + 1
+            
+            # Look ahead for continuation lines (descriptions split across lines)
+            while next_i < len(lines) and next_i < i + 3:  # Check up to 2 lines ahead
+                next_line = lines[next_i].strip()
                 
-                candidate_id = ssn_match.group(1)
+                if not next_line:
+                    next_i += 1
+                    continue
                 
-                # --- Parse Left Side (Date + Name) ---
-                # Look for Date at the start
-                date_match = re.match(r'^\s*(\d{1,2}/\d{1,2}/\d{4})', pre_ssn)
+                # If next line starts with date or has SSN, we've found the next item
+                if date_pattern.match(next_line) or ssn_pattern.search(next_line):
+                    break
                 
-                if date_match:
-                    service_date = date_match.group(1)
-                    # Optimized: Use SSN as name (name not used for fingerprinting)
-                    candidate_name = candidate_id
-                    
-                    # --- Parse Right Side (Description + Amount) ---
-                    # Look for Amount at the very end of the line
-                    amount_match = re.search(r'([\d,]+\.\d{2})\s*$', post_ssn)
-                    
-                    if amount_match:
-                        amount_str = amount_match.group(1).replace(',', '')
-                        amount = float(amount_str)
-                        
-                        # Description is everything between SSN and Amount
-                        description = post_ssn[:amount_match.start()].strip()
-                        # Normalize description (first meaningful words for fingerprinting)
-                        desc_words = description.split()[:5]  # First 5 words sufficient
-                        description = ' '.join(desc_words).strip()
-                        
-                        # Create metadata
-                        metadata = {
-                            "source_ssn": candidate_id
-                        }
-                        
-                        # Create Line Item
-                        item = ExtractedLineItem(
-                            service_date=service_date,
-                            candidate_id=candidate_id,
-                            candidate_name=candidate_name,
-                            amount=amount,
-                            service_description=description,
-                            metadata=metadata
-                        )
-                        line_items.append(item)
+                # If next line looks like continuation (text without date/SSN), merge it
+                if re.match(r'^[A-Za-z]', next_line) and not ssn_pattern.search(next_line):
+                    merged_post_ssn += ' ' + next_line
+                    next_i += 1
+                else:
+                    break
+            
+            # Re-extract amount from merged description if needed
+            if amount_match:
+                # Find amount in merged description
+                merged_amount_match = re.search(r'[\$]?([\d,]+\.\d{2})\s*$', merged_post_ssn)
+                if merged_amount_match:
+                    amount_match = merged_amount_match
+            
+            if not amount_match:
+                i = next_i
+                continue
+            
+            amount_str = amount_match.group(1).replace(',', '')
+            try:
+                amount = float(amount_str)
+            except ValueError:
+                i = next_i
+                continue
+            
+            # Description is everything between SSN and Amount (use merged if available)
+            description = merged_post_ssn[:amount_match.start()].strip()
+            
+            # Normalize description (first meaningful words for fingerprinting)
+            if description:
+                desc_words = description.split()[:5]  # First 5 words sufficient
+                description = ' '.join(desc_words).strip()
+            else:
+                description = "Service"
+            
+            # Create metadata
+            metadata = {
+                "source_ssn": candidate_id
+            }
+            
+            # Create Line Item
+            item = ExtractedLineItem(
+                service_date=service_date,
+                candidate_id=candidate_id,
+                candidate_name=candidate_name,
+                amount=amount,
+                service_description=description,
+                metadata=metadata
+            )
+            line_items.append(item)
+            
+            # Move to next line (or past continuation lines)
+            i = next_i
         
         return line_items
