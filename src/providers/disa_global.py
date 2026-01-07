@@ -5,6 +5,9 @@ import re
 import pdfplumber
 from typing import List
 from .base import BaseProvider, ExtractedInvoice, ExtractedLineItem
+from src.logger import get_logger
+
+logger = get_logger()
 
 
 class DisaGlobalProvider(BaseProvider):
@@ -117,6 +120,17 @@ class DisaGlobalProvider(BaseProvider):
                             }
                         )
                         line_items.append(item)
+            
+            # If no line items found from tables, try OCR fallback
+            if not line_items:
+                logger.info("No line items found with table extraction. Attempting OCR fallback for Disa Global invoice.")
+                try:
+                    lines = self._get_text_lines(pdf_path, use_ocr=True)
+                    line_items = self._parse_text_lines(lines)
+                    logger.info(f"OCR extraction found {len(line_items)} line items.")
+                except Exception as e:
+                    logger.error(f"OCR extraction failed: {str(e)}", exc_info=True)
+                    # Continue to raise the original error if OCR also fails
 
         if not line_items:
             raise ValueError("Could not extract line items. Format may have changed.")
@@ -130,3 +144,19 @@ class DisaGlobalProvider(BaseProvider):
             line_items=line_items,
             grand_total=grand_total
         )
+    
+    def _parse_text_lines(self, lines: List[str]) -> List[ExtractedLineItem]:
+        """
+        Parse text lines into line items using Disa Global-specific logic.
+        This is a fallback when table extraction fails.
+        
+        Args:
+            lines: List of text lines to parse
+            
+        Returns:
+            List of ExtractedLineItem objects
+        """
+        # Disa Global primarily uses table extraction, so this is a minimal fallback
+        # If OCR is needed, it would require understanding the text format
+        # For now, return empty list to indicate table extraction is preferred
+        return []

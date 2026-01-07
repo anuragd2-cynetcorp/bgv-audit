@@ -5,6 +5,9 @@ import re
 import pdfplumber
 from typing import List
 from .base import BaseProvider, ExtractedInvoice, ExtractedLineItem
+from src.logger import get_logger
+
+logger = get_logger()
 
 
 class FastMedProvider(BaseProvider):
@@ -134,44 +137,19 @@ class FastMedProvider(BaseProvider):
 
             # --- Step 4: Regex Fallback (if tables failed) ---
             if not line_items:
-                for page in pdf.pages:
-                    text = page.extract_text(layout=True)
-                    if not text: continue
-                    
-                    lines = text.split('\n')
-                    for line in lines:
-                        line = line.strip()
-                        
-                        # Regex for FastMed Row: Date ... Amount
-                        if not re.match(r'^\d{1,2}/\d{1,2}/\d{4}', line):
-                            continue
-                            
-                        amount_match = re.search(r'\$?([\d,]+\.\d{2})$', line)
-                        if not amount_match:
-                            continue
-                            
-                        try:
-                            amount = float(amount_match.group(1).replace(',', ''))
-                            
-                            # Split the rest
-                            clean_line = line[:amount_match.start()].strip()
-                            parts = clean_line.split()
-                            
-                            date_str = parts[0]
-                            # Heuristic: Name is usually parts[2] and parts[3]
-                            # This is a last resort fallback
-                            name = f"{parts[2]} {parts[3]}" if len(parts) > 3 else "Unknown"
-                            desc = " ".join(parts[4:])
-                            
-                            line_items.append(ExtractedLineItem(
-                                service_date=date_str,
-                                candidate_id=name,
-                                candidate_name=name,
-                                amount=amount,
-                                service_description=desc
-                            ))
-                        except Exception:
-                            continue
+                lines = self._get_text_lines(pdf_path, use_ocr=False)
+                line_items = self._parse_text_lines(lines)
+            
+            # --- Step 5: OCR Fallback (if regex also failed) ---
+            if not line_items:
+                logger.info("No line items found with table and text extraction. Attempting OCR fallback for FastMed invoice.")
+                try:
+                    lines = self._get_text_lines(pdf_path, use_ocr=True)
+                    line_items = self._parse_text_lines(lines)
+                    logger.info(f"OCR extraction found {len(line_items)} line items.")
+                except Exception as e:
+                    logger.error(f"OCR extraction failed: {str(e)}", exc_info=True)
+                    # Continue to raise the original error if OCR also fails
 
         if not line_items:
             raise ValueError("Could not extract line items from invoice. Format may have changed.")
@@ -185,3 +163,51 @@ class FastMedProvider(BaseProvider):
             line_items=line_items,
             grand_total=grand_total
         )
+    
+    def _parse_text_lines(self, lines: List[str]) -> List[ExtractedLineItem]:
+        """
+        Parse text lines into line items using FastMed-specific regex fallback logic.
+        
+        Args:
+            lines: List of text lines to parse
+            
+        Returns:
+            List of ExtractedLineItem objects
+        """
+        line_items = []
+        
+        for line in lines:
+            line = line.strip()
+            
+            # Regex for FastMed Row: Date ... Amount
+            if not re.match(r'^\d{1,2}/\d{1,2}/\d{4}', line):
+                continue
+                
+            amount_match = re.search(r'\$?([\d,]+\.\d{2})$', line)
+            if not amount_match:
+                continue
+                
+            try:
+                amount = float(amount_match.group(1).replace(',', ''))
+                
+                # Split the rest
+                clean_line = line[:amount_match.start()].strip()
+                parts = clean_line.split()
+                
+                date_str = parts[0]
+                # Heuristic: Name is usually parts[2] and parts[3]
+                # This is a last resort fallback
+                name = f"{parts[2]} {parts[3]}" if len(parts) > 3 else "Unknown"
+                desc = " ".join(parts[4:])
+                
+                line_items.append(ExtractedLineItem(
+                    service_date=date_str,
+                    candidate_id=name,
+                    candidate_name=name,
+                    amount=amount,
+                    service_description=desc
+                ))
+            except Exception:
+                continue
+        
+        return line_items

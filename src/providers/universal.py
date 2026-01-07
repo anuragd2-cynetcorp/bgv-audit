@@ -5,6 +5,9 @@ import re
 import pdfplumber
 from typing import List
 from .base import BaseProvider, ExtractedInvoice, ExtractedLineItem
+from src.logger import get_logger
+
+logger = get_logger()
 
 
 class UniversalProvider(BaseProvider):
@@ -39,11 +42,6 @@ class UniversalProvider(BaseProvider):
         grand_total = 0.0
         line_items = []
         
-        # State variables
-        current_date = None
-        current_candidate_name = None
-        current_order_id = None
-        
         with pdfplumber.open(pdf_path) as pdf:
             # 1. Attempt to find Invoice Number (if it exists on page 1)
             first_page_text = pdf.pages[0].extract_text()
@@ -51,74 +49,28 @@ class UniversalProvider(BaseProvider):
             if inv_match:
                 invoice_number = inv_match.group(1)
 
-            # 2. Iterate through all pages
-            for page in pdf.pages:
-                text = page.extract_text(layout=True) # layout=True helps separate columns visually
-                if not text:
-                    continue
-                
-                lines = text.split('\n')
-                for line in lines:
-                    line = line.strip()
-                    
-                    # --- Check for Grand Total (usually last page) ---
-                    # Pattern: "Invoice Total $<amount>"
-                    total_match = re.search(r'Invoice Total\s+\$([\d,]+\.\d{2})', line)
-                    if total_match:
-                        grand_total = float(total_match.group(1).replace(',', ''))
-                        continue
-
-                    # --- Check for Candidate Header ---
-                    # Pattern: "<date> <name> - (Order # <id>)"
-                    # Regex: Date | Name | - | (Order # ID)
-                    header_match = re.match(r'^(\d{1,2}/\d{1,2}/\d{4})\s+(.+?)\s+-\s+\(Order\s+#\s+(\d+)\)', line)
-                    if header_match:
-                        current_date = header_match.group(1)
-                        current_candidate_name = header_match.group(2).strip()
-                        current_order_id = header_match.group(3)
-                        continue
-
-                    # --- Check for Subtotal Line (Skip) ---
-                    if line.startswith("Subtotal for Order"):
-                        continue
-                        
-                    # --- Check for Table Headers (Skip) ---
-                    if "Candidate name - order number" in line:
-                        continue
-
-                    # --- Check for Line Item ---
-                    # Pattern: Description followed by Amount at the end
-                    # Format: "<description> $<amount>"
-                    # Regex: Start of line, anything (lazy), space, currency at end
-                    item_match = re.match(r'^(.+?)\s+\$([\d,]+\.\d{2})$', line)
-                    
-                    if item_match and current_order_id:
-                        description = item_match.group(1).strip()
-                        amount_str = item_match.group(2)
-                        
-                        try:
-                            amount = float(amount_str.replace(',', ''))
-                        except ValueError:
-                            continue
-                            
-                        # Filter out lines that might be headers or noise
-                        if description.lower() == "item total":
-                            continue
-
-                        # Create Line Item
-                        # We use the Order ID as the Candidate ID because it is unique per request
-                        item = ExtractedLineItem(
-                            service_date=current_date,
-                            candidate_id=current_order_id, 
-                            candidate_name=current_candidate_name,
-                            amount=amount,
-                            service_description=description,
-                            metadata={
-                                "order_number": current_order_id
-                            }
-                        )
-                        line_items.append(item)
-
+            # 2. Extract Grand Total (usually last page)
+            last_page_text = pdf.pages[-1].extract_text()
+            total_match = re.search(r'Invoice Total\s+\$([\d,]+\.\d{2})', last_page_text)
+            if total_match:
+                grand_total = float(total_match.group(1).replace(',', ''))
+            
+            # 3. Extract Line Items
+            # Try normal text extraction first
+            lines = self._get_text_lines(pdf_path, use_ocr=False)
+            line_items = self._parse_text_lines(lines)
+            
+            # If no line items found, try OCR fallback
+            if not line_items:
+                logger.info("No line items found with text extraction. Attempting OCR fallback for Universal invoice.")
+                try:
+                    lines = self._get_text_lines(pdf_path, use_ocr=True)
+                    line_items = self._parse_text_lines(lines)
+                    logger.info(f"OCR extraction found {len(line_items)} line items.")
+                except Exception as e:
+                    logger.error(f"OCR extraction failed: {str(e)}", exc_info=True)
+                    # Continue to raise the original error if OCR also fails
+        
         if not line_items:
             raise ValueError("Could not extract line items. Format may have changed.")
             
@@ -132,3 +84,73 @@ class UniversalProvider(BaseProvider):
             line_items=line_items,
             grand_total=grand_total
         )
+    
+    def _parse_text_lines(self, lines: List[str]) -> List[ExtractedLineItem]:
+        """
+        Parse text lines into line items using Universal-specific logic.
+        Uses state machine to track order context.
+        
+        Args:
+            lines: List of text lines to parse
+            
+        Returns:
+            List of ExtractedLineItem objects
+        """
+        line_items = []
+        
+        # State variables
+        current_date = None
+        current_candidate_name = None
+        current_order_id = None
+        
+        for line in lines:
+            line = line.strip()
+            
+            # --- Check for Candidate Header ---
+            # Pattern: "<date> <name> - (Order # <id>)"
+            header_match = re.match(r'^(\d{1,2}/\d{1,2}/\d{4})\s+(.+?)\s+-\s+\(Order\s+#\s+(\d+)\)', line)
+            if header_match:
+                current_date = header_match.group(1)
+                current_candidate_name = header_match.group(2).strip()
+                current_order_id = header_match.group(3)
+                continue
+
+            # --- Check for Subtotal Line (Skip) ---
+            if line.startswith("Subtotal for Order"):
+                continue
+                
+            # --- Check for Table Headers (Skip) ---
+            if "Candidate name - order number" in line:
+                continue
+
+            # --- Check for Line Item ---
+            # Pattern: Description followed by Amount at the end
+            item_match = re.match(r'^(.+?)\s+\$([\d,]+\.\d{2})$', line)
+            
+            if item_match and current_order_id:
+                description = item_match.group(1).strip()
+                amount_str = item_match.group(2)
+                
+                try:
+                    amount = float(amount_str.replace(',', ''))
+                except ValueError:
+                    continue
+                    
+                # Filter out lines that might be headers or noise
+                if description.lower() == "item total":
+                    continue
+
+                # Create Line Item
+                item = ExtractedLineItem(
+                    service_date=current_date,
+                    candidate_id=current_order_id, 
+                    candidate_name=current_candidate_name,
+                    amount=amount,
+                    service_description=description,
+                    metadata={
+                        "order_number": current_order_id
+                    }
+                )
+                line_items.append(item)
+        
+        return line_items

@@ -5,6 +5,9 @@ import re
 import pdfplumber
 from typing import List, Optional
 from .base import BaseProvider, ExtractedInvoice, ExtractedLineItem
+from src.logger import get_logger
+
+logger = get_logger()
 
 
 class QuestProvider(BaseProvider):
@@ -76,75 +79,22 @@ class QuestProvider(BaseProvider):
             if total_match:
                 grand_total = float(total_match.group(1).replace(',', ''))
 
-            # 2. Extract Line Items (Iterate through all pages)
-            for page in pdf.pages:
-                text = page.extract_text()
-                if not text:
-                    continue
-                    
-                lines = text.split('\n')
-                
-                for line in lines:
-                    line = line.strip()
-                    
-                    # --- Pattern A: New Candidate Line ---
-                    # Regex: Date | Specimen | Patient ID | Name
-                    # Format: "<date> <specimen_id> <patient_id> <name>"
-                    # Group 1: Date (MM/DD/YYYY)
-                    # Group 2: Specimen ID (Ignored for now)
-                    # Group 3: Patient ID (Candidate ID)
-                    # Group 4: Patient Name
-                    candidate_match = re.match(r'^(\d{2}/\d{2}/\d{4})\s+(\d+)\s+([A-Z0-9]+)\s+(.*)', line)
-                    
-                    if candidate_match:
-                        # Update State
-                        current_date = candidate_match.group(1)
-                        current_candidate_id = candidate_match.group(3)
-                        current_candidate_name = candidate_match.group(4).strip()
-                        
-                        # Note: We do not create a line item yet. We wait for the service lines
-                        # that follow this header.
-                        
-                    # --- Pattern B: Service Line ---
-                    # Regex: Description | 7-digit Code | Amount
-                    # Format: "<description> <code> $<amount>"
-                    # We exclude "PATIENT TOTAL" explicitly as it is a sub-sum line
-                    
-                    if "PATIENT TOTAL" in line:
-                        continue
-
-                    # Look for 7 digit code followed by price at end of line
-                    service_match = re.search(r'(?P<desc>.+?)\s+(?P<code>\d{7})\s+\$(?P<amount>[\d,]+\.\d{2})$', line)
-                    
-                    # We only extract if we have a valid context (Candidate ID and Date)
-                    if service_match and current_candidate_id and current_date:
-                        description = service_match.group('desc').strip()
-                        amount = float(service_match.group('amount').replace(',', ''))
-                        
-                        # Clean up description:
-                        # Sometimes the description line starts with the candidate name if the PDF 
-                        # formatting is tight. If description starts with the candidate name, strip it.
-                        if current_candidate_name and description.startswith(current_candidate_name):
-                            description = description.replace(current_candidate_name, "").strip()
-                        
-                        # Final validation before adding
-                        if not description:
-                            continue
-
-                        # Create the standardized line item
-                        # Note: We pass 'current_date' as 'service_date'
-                        item = ExtractedLineItem(
-                            candidate_name=current_candidate_name or "Unknown",
-                            candidate_id=current_candidate_id,
-                            amount=amount,
-                            service_date=current_date,
-                            service_description=description,
-                            metadata={
-                                "service_code": service_match.group('code')
-                            }
-                        )
-                        line_items.append(item)
-
+            # 2. Extract Line Items
+            # Try normal text extraction first
+            lines = self._get_text_lines(pdf_path, use_ocr=False)
+            line_items = self._parse_text_lines(lines)
+            
+            # If no line items found, try OCR fallback
+            if not line_items:
+                logger.info("No line items found with text extraction. Attempting OCR fallback for Quest invoice.")
+                try:
+                    lines = self._get_text_lines(pdf_path, use_ocr=True)
+                    line_items = self._parse_text_lines(lines)
+                    logger.info(f"OCR extraction found {len(line_items)} line items.")
+                except Exception as e:
+                    logger.error(f"OCR extraction failed: {str(e)}", exc_info=True)
+                    # Continue to raise the original error if OCR also fails
+        
         # Validation: Ensure we actually extracted data
         if not line_items:
             # If regex failed, it might be a scanned image or a changed format
@@ -159,6 +109,80 @@ class QuestProvider(BaseProvider):
             line_items=line_items,
             grand_total=grand_total
         )
+    
+    def _parse_text_lines(self, lines: List[str]) -> List[ExtractedLineItem]:
+        """
+        Parse text lines into line items using Quest-specific logic.
+        Uses state machine to track candidate context and extract service lines.
+        
+        Args:
+            lines: List of text lines to parse
+            
+        Returns:
+            List of ExtractedLineItem objects
+        """
+        line_items = []
+        
+        # State machine variables to hold context across lines
+        current_date = None
+        current_candidate_id = None
+        current_candidate_name = None
+        
+        for line in lines:
+            line = line.strip()
+            
+            # --- Pattern A: New Candidate Line ---
+            # Regex: Date | Specimen | Patient ID | Name
+            # Format: "<date> <specimen_id> <patient_id> <name>"
+            candidate_match = re.match(r'^(\d{2}/\d{2}/\d{4})\s+(\d+)\s+([A-Z0-9]+)\s+(.*)', line)
+            
+            if candidate_match:
+                # Update State
+                current_date = candidate_match.group(1)
+                current_candidate_id = candidate_match.group(3)
+                current_candidate_name = candidate_match.group(4).strip()
+                continue
+                
+            # --- Pattern B: Service Line ---
+            # Regex: Description | 7-digit Code | Amount
+            # Format: "<description> <code> $<amount>"
+            # We exclude "PATIENT TOTAL" explicitly as it is a sub-sum line
+            
+            if "PATIENT TOTAL" in line:
+                continue
+
+            # Look for 7 digit code followed by price at end of line
+            service_match = re.search(r'(?P<desc>.+?)\s+(?P<code>\d{7})\s+\$(?P<amount>[\d,]+\.\d{2})$', line)
+            
+            # We only extract if we have a valid context (Candidate ID and Date)
+            if service_match and current_candidate_id and current_date:
+                description = service_match.group('desc').strip()
+                amount = float(service_match.group('amount').replace(',', ''))
+                
+                # Clean up description:
+                # Sometimes the description line starts with the candidate name if the PDF 
+                # formatting is tight. If description starts with the candidate name, strip it.
+                if current_candidate_name and description.startswith(current_candidate_name):
+                    description = description.replace(current_candidate_name, "").strip()
+                
+                # Final validation before adding
+                if not description:
+                    continue
+
+                # Create the standardized line item
+                item = ExtractedLineItem(
+                    candidate_name=current_candidate_name or "Unknown",
+                    candidate_id=current_candidate_id,
+                    amount=amount,
+                    service_date=current_date,
+                    service_description=description,
+                    metadata={
+                        "service_code": service_match.group('code')
+                    }
+                )
+                line_items.append(item)
+        
+        return line_items
     
 
 

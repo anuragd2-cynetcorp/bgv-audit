@@ -5,6 +5,9 @@ import re
 import pdfplumber
 from typing import List
 from .base import BaseProvider, ExtractedInvoice, ExtractedLineItem
+from src.logger import get_logger
+
+logger = get_logger()
 
 
 class ScoutLogicProvider(BaseProvider):
@@ -38,15 +41,6 @@ class ScoutLogicProvider(BaseProvider):
         grand_total = 0.0
         line_items = []
         
-        # State variables
-        current_date = None
-        current_candidate_name = None
-        current_file_number = None
-        
-        # Multi-line header handling
-        pending_date = None
-        pending_name_part = None
-        
         with pdfplumber.open(pdf_path) as pdf:
             # 1. Extract Invoice Number (Page 1)
             first_page_text = pdf.pages[0].extract_text()
@@ -61,109 +55,22 @@ class ScoutLogicProvider(BaseProvider):
             if total_match:
                 grand_total = float(total_match.group(1).replace(',', ''))
             
-            # 3. Extract Line Items (Iterate all pages)
-            for page in pdf.pages:
-                text = page.extract_text()
-                if not text:
-                    continue
-                
-                lines = text.split('\n')
-                
-                for line in lines:
-                    line = line.strip()
-                    if not line:
-                        continue
-
-                    # --- State 1: Check for Date at start of line ---
-                    # Pattern: Date (MM/DD/YYYY) at start of line
-                    date_match = re.match(r'^(\d{2}/\d{2}/\d{4})\s+(.*)', line)
-                    
-                    if date_match:
-                        temp_date = date_match.group(1)
-                        rest_of_line = date_match.group(2)
-                        
-                        # Check if SSN is on this line (Single Line Header)
-                        # Pattern: masked SSN (XXX-XX-####)
-                        if "XXX-XX-" in rest_of_line:
-                            current_date = temp_date
-                            
-                            # Split by SSN to get Name
-                            parts = re.split(r'XXX-XX-\d{4}', rest_of_line)
-                            current_candidate_name = parts[0].strip()
-                            
-                            # Extract File # from the part after SSN
-                            # Format: name followed by file number
-                            if len(parts) > 1:
-                                file_match = re.search(r'(\d+)\s*-?$', parts[1].strip())
-                                current_file_number = file_match.group(1) if file_match else "UNKNOWN"
-                            
-                            # Reset pending state
-                            pending_date = None
-                            pending_name_part = None
-                            
-                        else:
-                            # SSN not found -> Multi-line Header
-                            # Store what we have and wait for next line
-                            pending_date = temp_date
-                            pending_name_part = rest_of_line.strip()
-                        
-                        continue
-
-                    # --- State 2: Check for SSN on current line (Multi-line continuation) ---
-                    if pending_date and "XXX-XX-" in line:
-                        # This line contains the rest of the name and the SSN
-                        # Format: name part, masked SSN, additional info, file number
-                        
-                        parts = re.split(r'XXX-XX-\d{4}', line)
-                        name_part_2 = parts[0].strip()
-                        
-                        # Combine Date and Name
-                        current_date = pending_date
-                        current_candidate_name = f"{pending_name_part} {name_part_2}".strip()
-                        
-                        # Extract File #
-                        if len(parts) > 1:
-                            file_match = re.search(r'(\d+)\s*-?$', parts[1].strip())
-                            current_file_number = file_match.group(1) if file_match else "UNKNOWN"
-                        
-                        # Clear pending
-                        pending_date = None
-                        pending_name_part = None
-                        continue
-
-                    # --- State 3: Extract Line Items ---
-                    # We only extract if we have a valid candidate context
-                    if current_candidate_name:
-                        # Skip headers and subtotals
-                        if any(x in line for x in ["DATE NAME SSN", "Subtotal for", "REPORT CHARGES"]):
-                            continue
-                        
-                        # Regex for Line Item: Description ... Amount
-                        # Handles negative amounts
-                        item_match = re.search(r'^(.+?)\s+(-?\$?[\d,]+\.\d{2})$', line)
-                        
-                        if item_match:
-                            description = item_match.group(1).strip()
-                            amount_str = item_match.group(2).replace('$', '').replace(',', '')
-                            
-                            try:
-                                amount = float(amount_str)
-                            except ValueError:
-                                continue
-
-                            # Create Line Item
-                            item = ExtractedLineItem(
-                                service_date=current_date,
-                                candidate_id=current_file_number or "UNKNOWN",
-                                candidate_name=current_candidate_name,
-                                amount=amount,
-                                service_description=description,
-                                metadata={
-                                    "file_number": current_file_number
-                                }
-                            )
-                            line_items.append(item)
-
+            # 3. Extract Line Items
+            # Try normal text extraction first
+            lines = self._get_text_lines(pdf_path, use_ocr=False)
+            line_items = self._parse_text_lines(lines)
+            
+            # If no line items found, try OCR fallback
+            if not line_items:
+                logger.info("No line items found with text extraction. Attempting OCR fallback for Scout Logic invoice.")
+                try:
+                    lines = self._get_text_lines(pdf_path, use_ocr=True)
+                    line_items = self._parse_text_lines(lines)
+                    logger.info(f"OCR extraction found {len(line_items)} line items.")
+                except Exception as e:
+                    logger.error(f"OCR extraction failed: {str(e)}", exc_info=True)
+                    # Continue to raise the original error if OCR also fails
+        
         if not line_items:
             raise ValueError("Could not extract line items from invoice. Format may have changed.")
             
@@ -177,3 +84,119 @@ class ScoutLogicProvider(BaseProvider):
             line_items=line_items,
             grand_total=grand_total
         )
+    
+    def _parse_text_lines(self, lines: List[str]) -> List[ExtractedLineItem]:
+        """
+        Parse text lines into line items using Scout Logic-specific logic.
+        Uses state machine to handle multi-line headers.
+        
+        Args:
+            lines: List of text lines to parse
+            
+        Returns:
+            List of ExtractedLineItem objects
+        """
+        line_items = []
+        
+        # State variables
+        current_date = None
+        current_candidate_name = None
+        current_file_number = None
+        
+        # Multi-line header handling
+        pending_date = None
+        pending_name_part = None
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+
+            # --- State 1: Check for Date at start of line ---
+            # Pattern: Date (MM/DD/YYYY) at start of line
+            date_match = re.match(r'^(\d{2}/\d{2}/\d{4})\s+(.*)', line)
+            
+            if date_match:
+                temp_date = date_match.group(1)
+                rest_of_line = date_match.group(2)
+                
+                # Check if SSN is on this line (Single Line Header)
+                # Pattern: masked SSN (XXX-XX-####)
+                if "XXX-XX-" in rest_of_line:
+                    current_date = temp_date
+                    
+                    # Split by SSN to get Name
+                    parts = re.split(r'XXX-XX-\d{4}', rest_of_line)
+                    current_candidate_name = parts[0].strip()
+                    
+                    # Extract File # from the part after SSN
+                    if len(parts) > 1:
+                        file_match = re.search(r'(\d+)\s*-?$', parts[1].strip())
+                        current_file_number = file_match.group(1) if file_match else "UNKNOWN"
+                    
+                    # Reset pending state
+                    pending_date = None
+                    pending_name_part = None
+                    
+                else:
+                    # SSN not found -> Multi-line Header
+                    # Store what we have and wait for next line
+                    pending_date = temp_date
+                    pending_name_part = rest_of_line.strip()
+                
+                continue
+
+            # --- State 2: Check for SSN on current line (Multi-line continuation) ---
+            if pending_date and "XXX-XX-" in line:
+                # This line contains the rest of the name and the SSN
+                parts = re.split(r'XXX-XX-\d{4}', line)
+                name_part_2 = parts[0].strip()
+                
+                # Combine Date and Name
+                current_date = pending_date
+                current_candidate_name = f"{pending_name_part} {name_part_2}".strip()
+                
+                # Extract File #
+                if len(parts) > 1:
+                    file_match = re.search(r'(\d+)\s*-?$', parts[1].strip())
+                    current_file_number = file_match.group(1) if file_match else "UNKNOWN"
+                
+                # Clear pending
+                pending_date = None
+                pending_name_part = None
+                continue
+
+            # --- State 3: Extract Line Items ---
+            # We only extract if we have a valid candidate context
+            if current_candidate_name:
+                # Skip headers and subtotals
+                if any(x in line for x in ["DATE NAME SSN", "Subtotal for", "REPORT CHARGES"]):
+                    continue
+                
+                # Regex for Line Item: Description ... Amount
+                # Handles negative amounts
+                item_match = re.search(r'^(.+?)\s+(-?\$?[\d,]+\.\d{2})$', line)
+                
+                if item_match:
+                    description = item_match.group(1).strip()
+                    amount_str = item_match.group(2).replace('$', '').replace(',', '')
+                    
+                    try:
+                        amount = float(amount_str)
+                    except ValueError:
+                        continue
+
+                    # Create Line Item
+                    item = ExtractedLineItem(
+                        service_date=current_date,
+                        candidate_id=current_file_number or "UNKNOWN",
+                        candidate_name=current_candidate_name,
+                        amount=amount,
+                        service_description=description,
+                        metadata={
+                            "file_number": current_file_number
+                        }
+                    )
+                    line_items.append(item)
+        
+        return line_items
