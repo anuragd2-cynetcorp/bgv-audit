@@ -84,33 +84,51 @@ class SummitHealthProvider(BaseProvider):
                     # --- Extract Service Line ---
                     # Only process if we have a valid patient context
                     if current_candidate_name:
-                        # Pattern: Date | Code | Description | Amount
-                        # Regex: Start -> Date -> Space -> Code -> Space -> Description -> Space -> $Amount -> End
-                        
+                        # Pattern: Date | (Optional Code) | Description | Amount (can be negative)
                         # Check if line starts with a date to filter out headers/subtotals
                         if not re.match(r'^\d{2}/\d{2}/\d{4}', line):
                             continue
-                            
-                        # Updated regex to allow commas in procedure code
-                        item_match = re.match(r'^(\d{2}/\d{2}/\d{4})\s+([A-Z0-9,]+)\s+(.+?)\s+\$([\d,]+\.\d{2})$', line)
+                        
+                        # Try pattern with procedure code first (handles negative amounts)
+                        item_match = re.match(r'^(\d{2}/\d{2}/\d{4})\s+([A-Z0-9,]+)\s+(.+?)\s+(-?)\$([\d,]+\.\d{2})$', line)
+                        proc_code = None
                         
                         if item_match:
                             date_str = item_match.group(1)
                             proc_code = item_match.group(2)
                             description = item_match.group(3).strip()
-                            amount = float(item_match.group(4).replace(',', ''))
-                            print(f"Date: {date_str}, Procedure Code: {proc_code}, Description: {description}, Amount: {amount}")
-                            item = ExtractedLineItem(
-                                service_date=date_str,
-                                candidate_id=current_candidate_id,
-                                candidate_name=current_candidate_name,
-                                amount=amount,
-                                service_description=description,
-                                metadata={
-                                    "procedure_code": proc_code
-                                }
-                            )
-                            line_items.append(item)
+                            minus_sign = item_match.group(4)
+                            amount_str = item_match.group(5).replace(',', '')
+                            amount = float(amount_str)
+                            if minus_sign == '-':
+                                amount = -amount
+                        else:
+                            # Try pattern without procedure code (handles negative amounts)
+                            item_match = re.match(r'^(\d{2}/\d{2}/\d{4})\s+(.+?)\s+(-?)\$([\d,]+\.\d{2})$', line)
+                            if item_match:
+                                date_str = item_match.group(1)
+                                description = item_match.group(2).strip()
+                                minus_sign = item_match.group(3)
+                                amount_str = item_match.group(4).replace(',', '')
+                                amount = float(amount_str)
+                                if minus_sign == '-':
+                                    amount = -amount
+                            else:
+                                continue
+                        
+                        metadata = {}
+                        if proc_code:
+                            metadata["procedure_code"] = proc_code
+                        
+                        item = ExtractedLineItem(
+                            service_date=date_str,
+                            candidate_id=current_candidate_id,
+                            candidate_name=current_candidate_name,
+                            amount=amount,
+                            service_description=description,
+                            metadata=metadata
+                        )
+                        line_items.append(item)
 
         if not line_items:
             raise ValueError("Could not extract line items from invoice. Format may have changed.")
