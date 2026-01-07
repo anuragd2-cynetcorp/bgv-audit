@@ -95,7 +95,8 @@ class InvoiceService(BaseService[Invoice]):
         """
         # Base query: filter by user
         query = Invoice.db().filter('uploaded_by', '==', user_email)
-        
+        # Order by upload date descending
+        query = query.order('-upload_date')
         # Use Paginator utility
         pagination_result = Paginator.paginate(query, page=page, per_page=per_page)
         
