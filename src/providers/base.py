@@ -8,6 +8,12 @@ from datetime import datetime
 import hashlib
 import PyPDF2
 import pdfplumber
+from src.logger import get_logger
+import pytesseract
+from pdf2image import convert_from_path
+from PIL import Image
+
+logger = get_logger()
 
 
 def generate_fingerprint_id(date: str, candidate_id: str, name: str, amount: float, service_description: str) -> str:
@@ -232,4 +238,56 @@ class BaseProvider(ABC):
         """
         with pdfplumber.open(pdf_path) as pdf:
             return pdf.pages
+    
+    def _extract_with_ocr(self, pdf_path: str) -> List[ExtractedLineItem]:
+        """
+        Extract line items using OCR when text extraction fails.
+        Converts PDF pages to images, runs OCR, and calls provider-specific parsing.
+        
+        Args:
+            pdf_path: Path to the PDF file
+            
+        Returns:
+            List of ExtractedLineItem objects
+            
+        Raises:
+            ValueError: If OCR fails
+        """
+        try:
+            # Convert PDF pages to images
+            images = convert_from_path(pdf_path, dpi=300)
+            
+            all_lines = []
+            # Process each page with OCR
+            for page_num, image in enumerate(images):
+                # Run OCR on the image
+                ocr_text = pytesseract.image_to_string(image, config='--psm 6')
+                
+                if ocr_text:
+                    # Split into lines and add to collection
+                    page_lines = [line.strip() for line in ocr_text.split('\n') if line.strip()]
+                    all_lines.extend(page_lines)
+            
+            # Call provider-specific parsing method
+            return self._parse_ocr_text_lines(all_lines)
+        
+        except Exception as e:
+            logger.error(f"Error during OCR extraction: {str(e)}", exc_info=True)
+            raise ValueError(f"OCR extraction failed: {str(e)}")
+    
+    def _parse_ocr_text_lines(self, lines: List[str]) -> List[ExtractedLineItem]:
+        """
+        Parse OCR'd text lines into line items. Must be implemented by child classes
+        that want to use OCR fallback.
+        
+        Args:
+            lines: List of text lines from OCR
+            
+        Returns:
+            List of ExtractedLineItem objects
+            
+        Raises:
+            NotImplementedError: If not implemented by child class
+        """
+        raise NotImplementedError("Child class must implement _parse_ocr_text_lines if using OCR fallback")
 

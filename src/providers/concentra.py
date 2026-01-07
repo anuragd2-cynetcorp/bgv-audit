@@ -5,6 +5,9 @@ import re
 import pdfplumber
 from typing import List
 from .base import BaseProvider, ExtractedInvoice, ExtractedLineItem
+from src.logger import get_logger
+
+logger = get_logger()
 
 
 class ConcentraProvider(BaseProvider):
@@ -106,6 +109,16 @@ class ConcentraProvider(BaseProvider):
                                 )
                                 line_items.append(item)
 
+        # If no line items found, try OCR as fallback
+        if not line_items:
+            logger.info("No line items found with text extraction. Attempting OCR fallback for Concentra invoice.")
+            try:
+                line_items = self._extract_with_ocr(pdf_path)
+                logger.info(f"OCR extraction found {len(line_items)} line items.")
+            except Exception as e:
+                logger.error(f"OCR extraction failed: {str(e)}", exc_info=True)
+                # Continue to raise the original error if OCR also fails
+        
         if not line_items:
             raise ValueError("Could not extract line items from invoice. Format may have changed.")
             
@@ -118,3 +131,64 @@ class ConcentraProvider(BaseProvider):
             line_items=line_items,
             grand_total=grand_total
         )
+    
+    def _parse_ocr_text_lines(self, lines: List[str]) -> List[ExtractedLineItem]:
+        """
+        Parse OCR'd text lines into line items using Concentra-specific logic.
+        Applies the same SSN-based parsing strategy used in normal extraction.
+        
+        Args:
+            lines: List of text lines from OCR
+            
+        Returns:
+            List of ExtractedLineItem objects
+        """
+        line_items = []
+        
+        for line in lines:
+            # --- Anchor Strategy: Find the SSN ---
+            # Concentra always puts masked SSN (XXX-XX-####) in the middle of the line
+            ssn_match = re.search(r'(XXX-XX-\d{4})', line)
+            
+            if ssn_match:
+                # Split the line into two parts: Before SSN and After SSN
+                pre_ssn = line[:ssn_match.start()]
+                post_ssn = line[ssn_match.end():]
+                
+                candidate_id = ssn_match.group(1)
+                
+                # --- Parse Left Side (Date + Name) ---
+                # Look for Date at the start
+                date_match = re.match(r'^\s*(\d{1,2}/\d{1,2}/\d{4})', pre_ssn)
+                
+                if date_match:
+                    service_date = date_match.group(1)
+                    # Name is everything between Date and SSN
+                    candidate_name = pre_ssn[date_match.end():].strip()
+                    
+                    # --- Parse Right Side (Description + Amount) ---
+                    # Look for Amount at the very end of the line
+                    amount_match = re.search(r'([\d,]+\.\d{2})\s*$', post_ssn)
+                    
+                    if amount_match:
+                        amount_str = amount_match.group(1).replace(',', '')
+                        amount = float(amount_str)
+                        
+                        # Description is everything between SSN and Amount
+                        description = post_ssn[:amount_match.start()].strip()
+                        
+                        # Create Line Item
+                        item = ExtractedLineItem(
+                            service_date=service_date,
+                            candidate_id=candidate_id,
+                            candidate_name=candidate_name,
+                            amount=amount,
+                            service_description=description,
+                            metadata={
+                                "source_ssn": candidate_id,
+                                "extracted_via": "OCR"
+                            }
+                        )
+                        line_items.append(item)
+        
+        return line_items

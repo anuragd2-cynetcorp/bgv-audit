@@ -8,4 +8,7 @@ python-dotenv
 flask-wtf
 pdfplumber
 PyPDF2
+pytesseract
+Pillow
+pdf2image
 
