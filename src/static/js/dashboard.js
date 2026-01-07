@@ -121,10 +121,38 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (cancelBtn) {
                     cancelBtn.disabled = false;
                 }
-                showErrorInModal(data.message || 'An error occurred while processing the invoice.', data.provider_name, data.is_extraction_error);
+                
+                // Clean up error message
+                let errorMessage = data.message || 'An error occurred while processing the invoice.';
+                errorMessage = errorMessage.replace(/^Error:\s*/i, '').trim();
+                
+                // Show error in modal first
+                showErrorInModal(errorMessage, data.provider_name, data.is_extraction_error);
+                
                 // Reopen modal to show error
-                if (modal) {
-                    modal.show();
+                if (uploadModal) {
+                    // Get or create modal instance
+                    let errorModal = bootstrap.Modal.getInstance(uploadModal);
+                    if (!errorModal) {
+                        errorModal = new bootstrap.Modal(uploadModal, {
+                            backdrop: true,
+                            keyboard: true
+                        });
+                    }
+                    
+                    // Wait for any ongoing hide animation to complete, then show
+                    setTimeout(() => {
+                        // Ensure modal is fully hidden first
+                        uploadModal.classList.remove('show');
+                        document.body.classList.remove('modal-open');
+                        const backdrop = document.querySelector('.modal-backdrop');
+                        if (backdrop) {
+                            backdrop.remove();
+                        }
+                        
+                        // Now show the modal with error
+                        errorModal.show();
+                    }, 300);
                 }
             }
         })
@@ -150,17 +178,42 @@ document.addEventListener('DOMContentLoaded', function() {
             // Show user-friendly error message (never show generic HTTP errors)
             let errorMessage = error.message || 'An error occurred while processing the invoice. Please try again.';
             
+            // Remove "Error: " prefix if it exists (to avoid duplication)
+            errorMessage = errorMessage.replace(/^Error:\s*/i, '').trim();
+            
             // Replace generic HTTP error messages with user-friendly ones
             if (errorMessage.includes('HTTP error!') || errorMessage.includes('status:')) {
                 errorMessage = 'An error occurred while processing the invoice. Please check your file and try again.';
             }
             
+            // Show error in modal first
             showErrorInModal(errorMessage, providerName, isExtractionError);
             console.error('Error:', error);
             
             // Reopen modal to show error
-            if (modal) {
-                modal.show();
+            if (uploadModal) {
+                // Get or create modal instance
+                let errorModal = bootstrap.Modal.getInstance(uploadModal);
+                if (!errorModal) {
+                    errorModal = new bootstrap.Modal(uploadModal, {
+                        backdrop: true,
+                        keyboard: true
+                    });
+                }
+                
+                // Wait for any ongoing hide animation to complete, then show
+                setTimeout(() => {
+                    // Ensure modal is fully hidden first
+                    uploadModal.classList.remove('show');
+                    document.body.classList.remove('modal-open');
+                    const backdrop = document.querySelector('.modal-backdrop');
+                    if (backdrop) {
+                        backdrop.remove();
+                    }
+                    
+                    // Now show the modal with error
+                    errorModal.show();
+                }, 300);
             }
         });
     
@@ -201,9 +254,15 @@ document.addEventListener('DOMContentLoaded', function() {
             `;
         }
         
+        // Set the error message content
         alertContent.innerHTML = errorMessage;
+        
+        // Make sure alert is visible
         uploadAlert.classList.remove('d-none', 'alert-success');
         uploadAlert.classList.add('alert-danger', 'show');
+        
+        // Force display to ensure it's visible
+        uploadAlert.style.display = 'block';
     }
     });
     
