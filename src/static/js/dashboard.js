@@ -37,14 +37,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // Hide any previous alerts
-        if (uploadAlert) {
-            uploadAlert.classList.add('d-none');
-            uploadAlert.classList.remove('alert-success', 'alert-danger', 'show');
-            const alertContent = document.getElementById('uploadAlertContent');
-            if (alertContent) {
-                alertContent.innerHTML = '';
-            }
-        }
+        hideErrorInModal();
         
         // Close modal immediately
         if (modal) {
@@ -126,9 +119,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 let errorMessage = data.message || 'An error occurred while processing the invoice.';
                 errorMessage = errorMessage.replace(/^Error:\s*/i, '').trim();
                 
-                // Show error in modal first
-                showErrorInModal(errorMessage, data.provider_name, data.is_extraction_error);
-                
                 // Reopen modal to show error
                 if (uploadModal) {
                     // Get or create modal instance
@@ -149,6 +139,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (backdrop) {
                             backdrop.remove();
                         }
+                        
+                        // Set error message right before showing modal
+                        showErrorInModal(errorMessage, data.provider_name, data.is_extraction_error);
                         
                         // Now show the modal with error
                         errorModal.show();
@@ -186,8 +179,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 errorMessage = 'An error occurred while processing the invoice. Please check your file and try again.';
             }
             
-            // Show error in modal first
-            showErrorInModal(errorMessage, providerName, isExtractionError);
             console.error('Error:', error);
             
             // Reopen modal to show error
@@ -210,6 +201,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (backdrop) {
                         backdrop.remove();
                     }
+                    
+                    // Set error message right before showing modal
+                    showErrorInModal(errorMessage, providerName, isExtractionError);
                     
                     // Now show the modal with error
                     errorModal.show();
@@ -257,12 +251,20 @@ document.addEventListener('DOMContentLoaded', function() {
         // Set the error message content
         alertContent.innerHTML = errorMessage;
         
-        // Make sure alert is visible
+        // Show the alert
         uploadAlert.classList.remove('d-none', 'alert-success');
-        uploadAlert.classList.add('alert-danger', 'show');
-        
-        // Force display to ensure it's visible
-        uploadAlert.style.display = 'block';
+        uploadAlert.classList.add('alert-danger');
+    }
+    
+    // Function to hide error alert
+    function hideErrorInModal() {
+        if (!uploadAlert) return;
+        uploadAlert.classList.add('d-none');
+        uploadAlert.classList.remove('alert-danger', 'alert-success');
+        const alertContent = document.getElementById('uploadAlertContent');
+        if (alertContent) {
+            alertContent.innerHTML = '';
+        }
     }
     });
     
@@ -270,14 +272,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (uploadModal) {
         uploadModal.addEventListener('hidden.bs.modal', function() {
             uploadForm.reset();
-            if (uploadAlert) {
-                uploadAlert.classList.add('d-none');
-                uploadAlert.classList.remove('alert-success', 'alert-danger', 'show');
-                const alertContent = document.getElementById('uploadAlertContent');
-                if (alertContent) {
-                    alertContent.innerHTML = '';
-                }
-            }
+            hideErrorInModal();
             if (submitBtn) submitBtn.disabled = false;
             if (cancelBtn) cancelBtn.disabled = false;
         });
