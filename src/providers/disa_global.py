@@ -75,42 +75,108 @@ class DisaGlobalProvider(BaseProvider):
 
                 for table in tables:
                     for row in table:
-                        # Clean row data (remove None)
+                        # Clean row data (remove None and strip whitespace)
                         row = [cell.strip() if cell else "" for cell in row]
+                        
+                        # Filter out completely empty rows
+                        if not any(row):
+                            continue
                         
                         # We need a row with at least 6 columns
                         # [Date, Order #, Subject, User, Order Content, Total]
-                        if len(row) < 6:
+                        # But be flexible - sometimes columns might be merged or missing
+                        if len(row) < 4:  # Minimum: Date, Order ID, something, Amount
                             continue
                             
                         # Check if this is a data row (First column looks like a date)
                         date_str = row[0]
-                        if not re.match(r'\d{1,2}/\d{1,2}/\d{4}', date_str):
+                        if not date_str or not re.match(r'\d{1,2}/\d{1,2}/\d{4}', date_str):
                             continue
+                        
+                        # Normalize date format (ensure consistent format)
+                        date_parts = date_str.split('/')
+                        if len(date_parts) == 3:
+                            month, day, year = date_parts
+                            date_str = f"{month.zfill(2)}/{day.zfill(2)}/{year}"
                             
-                        # Extract Fields
-                        # Col 0: Date -> Service Date
+                        # Extract Fields with flexible column mapping
+                        # Col 0: Date -> Service Date (already extracted)
                         # Col 1: Order # -> Candidate ID
-                        # Col 2: Subject -> Candidate Name
+                        # Col 2: Subject -> Candidate Name (stored in metadata)
+                        # Col 3: User (stored in metadata)
                         # Col 4: Order Content -> Description
                         # Col 5: Total -> Amount
                         
-                        order_id = row[1]
+                        # Order ID (required)
+                        order_id = row[1] if len(row) > 1 else ""
+                        if not order_id:
+                            # Try to find order ID in other columns if column 1 is empty
+                            for i, cell in enumerate(row[2:6], start=2):
+                                if cell and re.match(r'^\d+$', cell):
+                                    order_id = cell
+                                    break
+                        
+                        if not order_id:
+                            continue  # Skip if no order ID found
+                        
                         # Optimized: Use order ID as name (name not used for fingerprinting)
                         candidate_name = order_id
                         
-                        # Description: Normalize for fingerprinting (first meaningful words)
-                        raw_desc = row[4].replace('\n', ' ').strip()
-                        desc_words = raw_desc.split()[:5]  # First 5 words sufficient
-                        description = ' '.join(desc_words).strip()
+                        # Description: Extract from column 4 (Order Content)
+                        # Handle multi-line descriptions and normalize
+                        if len(row) > 4:
+                            raw_desc = row[4].replace('\n', ' ').strip()
+                        else:
+                            # Fallback: try to find description in other columns
+                            raw_desc = ""
+                            for i, cell in enumerate(row[2:], start=2):
+                                if cell and not re.match(r'^[\$]?[\d,]+\.\d{2}$', cell) and not re.match(r'^\d+$', cell):
+                                    raw_desc = cell.replace('\n', ' ').strip()
+                                    break
                         
-                        amount_str = row[5].replace('$', '').replace(',', '')
+                        # Normalize description (first meaningful words for fingerprinting)
+                        if raw_desc:
+                            desc_words = raw_desc.split()[:5]  # First 5 words sufficient
+                            description = ' '.join(desc_words).strip()
+                        else:
+                            description = "Service"
                         
-                        try:
-                            amount = float(amount_str)
-                        except ValueError:
-                            continue # Skip if no valid price
+                        # Amount: Extract from last column (usually column 5)
+                        amount = None
+                        amount_str = None
+                        
+                        # Try column 5 first (standard position)
+                        if len(row) > 5:
+                            amount_str = row[5].replace('$', '').replace(',', '').strip()
+                            try:
+                                amount = float(amount_str)
+                            except ValueError:
+                                amount = None
+                        
+                        # Fallback: look for amount in any column (find last numeric value that looks like money)
+                        if amount is None:
+                            for i in range(len(row) - 1, -1, -1):  # Search backwards
+                                cell = row[i]
+                                if not cell:
+                                    continue
+                                # Try to extract amount from cell
+                                amount_match = re.search(r'[\$]?([\d,]+\.\d{2})', str(cell))
+                                if amount_match:
+                                    amount_str = amount_match.group(1).replace(',', '')
+                                    try:
+                                        amount = float(amount_str)
+                                        break
+                                    except ValueError:
+                                        continue
+                        
+                        # Skip if we couldn't extract amount
+                        if amount is None:
+                            continue
                             
+                        # Extract metadata
+                        subject = row[2] if len(row) > 2 else ""
+                        user_ordered = row[3] if len(row) > 3 else ""
+                        
                         # Create Line Item
                         item = ExtractedLineItem(
                             service_date=date_str,
@@ -119,8 +185,8 @@ class DisaGlobalProvider(BaseProvider):
                             amount=amount,
                             service_description=description,
                             metadata={
-                                "user_ordered": row[3],
-                                "subject": row[2]  # Store raw name in metadata for reference
+                                "user_ordered": user_ordered,
+                                "subject": subject  # Store raw name in metadata for reference
                             }
                         )
                         line_items.append(item)
