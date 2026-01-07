@@ -121,40 +121,84 @@ class CityMDProvider(BaseProvider):
             # Only process if we have a valid patient context
             if current_candidate_name:
                 # Pattern: Date | (Optional Code) | Description | Amount (can be negative)
-                # Check if line starts with a date to filter out headers/subtotals
-                if not re.match(r'^\d{2}/\d{2}/\d{4}', line):
+                # More flexible date pattern: handle single/double digit months and days
+                date_match = re.match(r'^(\d{1,2}/\d{1,2}/\d{4})', line)
+                if not date_match:
                     continue
                 
-                # Try pattern with procedure code first (handles negative amounts)
-                item_match = re.match(r'^(\d{2}/\d{2}/\d{4})\s+([A-Z0-9,]+)\s+(.+?)\s+(-?)\$([\d,]+\.\d{2})$', line)
-                proc_code = None
+                date_str = date_match.group(1)
                 
+                # Try multiple patterns for more robust extraction
+                proc_code = None
+                description = None
+                amount = None
+                amount_str = None
+                
+                # Pattern 1: Date | Procedure Code | Description | Amount
+                # Procedure code: alphanumeric, can contain commas (e.g., "81099,MMRV")
+                item_match = re.match(r'^\d{1,2}/\d{1,2}/\d{4}\s+([A-Z0-9,]+)\s+(.+?)\s+(-?)\$?([\d,]+\.\d{2})\s*$', line)
                 if item_match:
-                    date_str = item_match.group(1)
-                    proc_code = item_match.group(2)
-                    description = item_match.group(3).strip()
-                    minus_sign = item_match.group(4)
-                    amount_str = item_match.group(5).replace(',', '')
-                    amount = float(amount_str)
-                    if minus_sign == '-':
-                        amount = -amount
-                else:
-                    # Try pattern without procedure code (handles negative amounts)
-                    item_match = re.match(r'^(\d{2}/\d{2}/\d{4})\s+(.+?)\s+(-?)\$([\d,]+\.\d{2})$', line)
-                    if item_match:
-                        date_str = item_match.group(1)
-                        description = item_match.group(2).strip()
-                        minus_sign = item_match.group(3)
-                        amount_str = item_match.group(4).replace(',', '')
+                    proc_code = item_match.group(1)
+                    description = item_match.group(2).strip()
+                    minus_sign = item_match.group(3)
+                    amount_str = item_match.group(4).replace(',', '')
+                    try:
                         amount = float(amount_str)
                         if minus_sign == '-':
                             amount = -amount
-                    else:
-                        continue
+                    except ValueError:
+                        amount = None
+                
+                # Pattern 2: Date | Description | Amount (no procedure code)
+                if amount is None:
+                    item_match = re.match(r'^\d{1,2}/\d{1,2}/\d{4}\s+(.+?)\s+(-?)\$?([\d,]+\.\d{2})\s*$', line)
+                    if item_match:
+                        description = item_match.group(1).strip()
+                        minus_sign = item_match.group(2)
+                        amount_str = item_match.group(3).replace(',', '')
+                        try:
+                            amount = float(amount_str)
+                            if minus_sign == '-':
+                                amount = -amount
+                        except ValueError:
+                            amount = None
+                
+                # Pattern 3: More flexible - find amount anywhere in line (OCR/formatting issues)
+                if amount is None:
+                    # Look for amount pattern (with or without $)
+                    amount_matches = list(re.finditer(r'[\$]?([\d,]+\.\d{2})', line))
+                    if amount_matches:
+                        # Use the last amount (usually the total price)
+                        amount_match = amount_matches[-1]
+                        amount_str = amount_match.group(1).replace(',', '')
+                        try:
+                            amount = float(amount_str)
+                            # Check for negative sign before amount
+                            amount_start = amount_match.start()
+                            if amount_start > 0 and line[amount_start - 1] == '-':
+                                amount = -amount
+                            # Extract description: everything between date and amount
+                            description = line[date_match.end():amount_start].strip()
+                        except ValueError:
+                            amount = None
+                
+                # Skip if we couldn't extract amount
+                if amount is None:
+                    continue
                 
                 # Normalize description (first meaningful words for fingerprinting)
-                desc_words = description.split()[:5]  # First 5 words sufficient
-                description = ' '.join(desc_words).strip()
+                if description:
+                    desc_words = description.split()[:5]  # First 5 words sufficient
+                    description = ' '.join(desc_words).strip()
+                else:
+                    description = "Service"
+                
+                # Normalize date format (ensure consistent format)
+                # Convert single digit months/days to double digit if needed
+                date_parts = date_str.split('/')
+                if len(date_parts) == 3:
+                    month, day, year = date_parts
+                    date_str = f"{month.zfill(2)}/{day.zfill(2)}/{year}"
                 
                 metadata = {}
                 if proc_code:
