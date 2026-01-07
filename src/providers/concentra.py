@@ -49,7 +49,8 @@ class ConcentraProvider(BaseProvider):
                 invoice_number = inv_match.group(1)
             
             # Grand Total
-            total_match = re.search(r'Balance(?: Due)?\s*[:]?\s*\$?([\d,]+\.\d{2})', first_page_text, re.IGNORECASE)
+            # Try normal pattern first
+            total_match = re.search(r'Balance(?: Due)?\s*[:]?\s*[5S]?\s*([\d,]+\.\d{2})', first_page_text, re.IGNORECASE)
             if total_match:
                 grand_total = float(total_match.group(1).replace(',', ''))
 
