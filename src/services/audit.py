@@ -137,12 +137,14 @@ class AuditService:
     def _check_internal_duplicates(self, extracted) -> AuditResult:
         """
         Check for duplicate line items within the same invoice.
+        Uses fingerprint based on: date, candidate_id, amount, and normalized description.
+        Note: candidate_name is NOT used for duplicate detection as it's unreliable.
         
         Args:
             extracted: ExtractedInvoice object
             
         Returns:
-            AuditResult
+            AuditResult with duplicate details for display
         """
         fingerprints = {}
         duplicates = []
@@ -150,13 +152,14 @@ class AuditService:
         for idx, item in enumerate(extracted.line_items):
             fingerprint = item.fingerprint
             if fingerprint in fingerprints:
-                # Found duplicate
+                # Found duplicate - include details for display in audit report
                 duplicates.append({
                     'row_number': idx + 1,
                     'candidate_id': item.candidate_id,
-                    'candidate_name': item.candidate_name,
-                    'service_description': item.service_description,
+                    'candidate_name': item.candidate_name,  # For display, may be simplified
+                    'service_description': item.service_description,  # For display
                     'amount': item.amount,
+                    'service_date': item.service_date,  # Include date for clarity
                     'duplicate_of_row': fingerprints[fingerprint] + 1
                 })
             else:

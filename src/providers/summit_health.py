@@ -112,8 +112,9 @@ class SummitHealthProvider(BaseProvider):
             # Pattern: "Patient:" followed by name, then "Patient ID:" followed by ID
             pat_match = re.search(r'Patient:\s*(.+?)\s+Patient ID:\s*(\d+)', line)
             if pat_match:
-                current_candidate_name = pat_match.group(1).strip()
+                # Optimized: Use ID as name (name not used for fingerprinting)
                 current_candidate_id = pat_match.group(2).strip()
+                current_candidate_name = current_candidate_id
                 continue
             
             # --- Extract Service Line ---
@@ -150,6 +151,10 @@ class SummitHealthProvider(BaseProvider):
                             amount = -amount
                     else:
                         continue
+                
+                # Normalize description (first meaningful words for fingerprinting)
+                desc_words = description.split()[:5]  # First 5 words sufficient
+                description = ' '.join(desc_words).strip()
                 
                 metadata = {}
                 if proc_code:

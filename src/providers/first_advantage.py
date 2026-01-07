@@ -130,7 +130,8 @@ class FirstAdvantageProvider(BaseProvider):
             case_match = re.search(r'Case ID:\s*(\d+)\s+(.+?)\s+(?:Ordered:|$)', line)
             if case_match:
                 current_case_id = case_match.group(1)
-                current_candidate_name = case_match.group(2).strip()
+                # Optimized: Use Case ID as name (name not used for fingerprinting)
+                current_candidate_name = current_case_id
                 # Reset date, look for it in this line or subsequent lines
                 current_service_date = None
                 
@@ -163,6 +164,10 @@ class FirstAdvantageProvider(BaseProvider):
                     description = std_match.group(1).strip()
                     amount = float(std_match.group(4).replace(',', ''))
                     
+                    # Normalize description (first meaningful words for fingerprinting)
+                    desc_words = description.split()[:5]  # First 5 words sufficient
+                    description = ' '.join(desc_words).strip()
+                    
                     item = ExtractedLineItem(
                         service_date=current_service_date or "",
                         candidate_id=current_case_id,
@@ -187,6 +192,10 @@ class FirstAdvantageProvider(BaseProvider):
                     # Filter out sub-totals or headers that might match this pattern
                     if "Total" in description or "Invoice" in description:
                         continue
+
+                    # Normalize description (first meaningful words for fingerprinting)
+                    desc_words = description.split()[:5]  # First 5 words sufficient
+                    description = ' '.join(desc_words).strip()
 
                     item = ExtractedLineItem(
                         service_date=current_service_date or "",

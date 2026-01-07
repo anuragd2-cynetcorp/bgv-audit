@@ -111,8 +111,9 @@ class UniversalProvider(BaseProvider):
             header_match = re.match(r'^(\d{1,2}/\d{1,2}/\d{4})\s+(.+?)\s+-\s+\(Order\s+#\s+(\d+)\)', line)
             if header_match:
                 current_date = header_match.group(1)
-                current_candidate_name = header_match.group(2).strip()
                 current_order_id = header_match.group(3)
+                # Optimized: Use order ID as name (name not used for fingerprinting)
+                current_candidate_name = current_order_id
                 continue
 
             # --- Check for Subtotal Line (Skip) ---
@@ -139,6 +140,10 @@ class UniversalProvider(BaseProvider):
                 # Filter out lines that might be headers or noise
                 if description.lower() == "item total":
                     continue
+
+                # Normalize description (first meaningful words for fingerprinting)
+                desc_words = description.split()[:5]  # First 5 words sufficient
+                description = ' '.join(desc_words).strip()
 
                 # Create Line Item
                 item = ExtractedLineItem(

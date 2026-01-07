@@ -96,10 +96,13 @@ class DisaGlobalProvider(BaseProvider):
                         # Col 5: Total -> Amount
                         
                         order_id = row[1]
-                        candidate_name = row[2]
-                        # Description: Take the first line of the content or generic text
+                        # Optimized: Use order ID as name (name not used for fingerprinting)
+                        candidate_name = order_id
+                        
+                        # Description: Normalize for fingerprinting (first meaningful words)
                         raw_desc = row[4].replace('\n', ' ').strip()
-                        description = raw_desc[:50] + "..." if len(raw_desc) > 50 else raw_desc
+                        desc_words = raw_desc.split()[:5]  # First 5 words sufficient
+                        description = ' '.join(desc_words).strip()
                         
                         amount_str = row[5].replace('$', '').replace(',', '')
                         
@@ -116,7 +119,8 @@ class DisaGlobalProvider(BaseProvider):
                             amount=amount,
                             service_description=description,
                             metadata={
-                                "user_ordered": row[3]
+                                "user_ordered": row[3],
+                                "subject": row[2]  # Store raw name in metadata for reference
                             }
                         )
                         line_items.append(item)

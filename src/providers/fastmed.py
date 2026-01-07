@@ -314,54 +314,27 @@ class FastMedProvider(BaseProvider):
                 if ssn:
                     name_clinic = name_clinic.replace(ssn, '').strip()
                 
-                # Split name_clinic into name and clinic
-                # Heuristic: First 2-3 capitalized words are likely the name
-                words = name_clinic.split()
-                patient_name = ""
-                clinic = ""
+                # Optimized: Use SSN or HAR# as candidate_id (name not used for fingerprinting)
+                candidate_id = ssn if ssn else (har_number if har_number else "Unknown")
+                # Use ID as name for simplicity
+                candidate_name = candidate_id
                 
-                # Find where name ends (usually after 2-3 words, before a known clinic pattern)
-                name_words = []
-                clinic_words = []
-                in_clinic = False
-                
-                for i, word in enumerate(words):
-                    # Clinic indicators: hyphenated words, known clinic names, or after 3 name words
-                    if in_clinic:
-                        clinic_words.append(word)
-                    elif '-' in word and i > 0:  # Hyphenated word (e.g., "Garner-Cleveland")
-                        clinic_words.append(word)
-                        in_clinic = True
-                    elif i >= 2 and (word[0].isupper() or word.isalpha()):
-                        # After 2 words, check if this looks like a clinic name
-                        # Clinics often have location-style names
-                        if len(name_words) >= 2:
-                            clinic_words.append(word)
-                            in_clinic = True
-                        else:
-                            name_words.append(word)
-                    else:
-                        name_words.append(word)
-                
-                patient_name = ' '.join(name_words) if name_words else "Unknown"
-                clinic = ' '.join(clinic_words)
-                
-                # Clean up patient name (remove any stray punctuation)
-                patient_name = re.sub(r'[^\w\s]', '', patient_name).strip()
-                
-                # Use SSN as candidate_id if available, else patient name
-                candidate_id = ssn if ssn else patient_name
+                # Normalize description (first meaningful words for fingerprinting)
+                full_description = f"{service_code} - {description}" if service_code else description
+                desc_words = full_description.split()[:5]  # First 5 words sufficient
+                normalized_description = ' '.join(desc_words).strip()
                 
                 line_items.append(ExtractedLineItem(
                     service_date=date_str,
                     candidate_id=candidate_id,
-                    candidate_name=patient_name,
+                    candidate_name=candidate_name,
                     amount=amount,
-                    service_description=f"{service_code} - {description}" if service_code else description,
+                    service_description=normalized_description,
                     metadata={
-                        "clinic": clinic,
+                        "clinic": name_clinic,  # Store raw for reference
                         "reference_number": har_number,
-                        "ssn": ssn
+                        "ssn": ssn,
+                        "service_code": service_code
                     }
                 ))
             except Exception as e:

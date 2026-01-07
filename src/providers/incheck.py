@@ -118,8 +118,9 @@ class InCheckProvider(BaseProvider):
             if date_match:
                 # If we were already capturing, force close the previous one (Safety Valve)
                 if capturing_candidate and candidate_name_buffer:
-                    current_candidate_name = " ".join(candidate_name_buffer).strip()
+                    # Optimized: Use file number or simplified name (name not used for fingerprinting)
                     current_file_number = "UNKNOWN"
+                    current_candidate_name = current_file_number
                 
                 # Reset for new candidate
                 capturing_candidate = False
@@ -142,14 +143,15 @@ class InCheckProvider(BaseProvider):
                         if name_part:
                             candidate_name_buffer.append(name_part)
                         
-                        current_candidate_name = " ".join(candidate_name_buffer).strip()
-                        
                         # Extract File # from right side
                         if len(parts) > 1:
                             file_match = re.search(r'(\d+)(?:\s*-\s*)?$', parts[1].strip())
                             current_file_number = file_match.group(1) if file_match else "UNKNOWN"
                         else:
                             current_file_number = "UNKNOWN"
+                        
+                        # Optimized: Use file number as name (name not used for fingerprinting)
+                        current_candidate_name = current_file_number
                             
                         # We found everything in one go
                         capturing_candidate = False
@@ -175,8 +177,6 @@ class InCheckProvider(BaseProvider):
                     if name_continuation:
                         candidate_name_buffer.append(name_continuation)
                     
-                    current_candidate_name = " ".join(candidate_name_buffer).strip()
-                    
                     # Extract File #
                     if len(parts) > 1:
                         file_match = re.search(r'(\d+)(?:\s*-\s*)?$', parts[1].strip())
@@ -184,19 +184,18 @@ class InCheckProvider(BaseProvider):
                     else:
                         current_file_number = "UNKNOWN"
                     
+                    # Optimized: Use file number as name (name not used for fingerprinting)
+                    current_candidate_name = current_file_number
+                    
                     capturing_candidate = False
                     candidate_name_buffer = []
                     continue 
                 
                 elif "$" in line:
                     # Safety Valve: We hit a price line but never found the SSN.
-                    # Assume the buffer IS the name.
-                    if candidate_name_buffer:
-                        current_candidate_name = " ".join(candidate_name_buffer).strip()
-                    else:
-                        current_candidate_name = "Unknown Candidate"
-                    
                     current_file_number = "UNKNOWN"
+                    # Optimized: Use file number as name (name not used for fingerprinting)
+                    current_candidate_name = current_file_number
                     capturing_candidate = False
                     candidate_name_buffer = []
                     # Fall through to State 3 to process this line as an item
@@ -222,10 +221,14 @@ class InCheckProvider(BaseProvider):
                     # Filter out headers/footers
                     if "REPORT CHARGES" in description or "Total Amount Due" in description:
                         continue
-                        
+                    
+                    # Normalize description (first meaningful words for fingerprinting)
+                    desc_words = description.split()[:5]  # First 5 words sufficient
+                    description = ' '.join(desc_words).strip()
+                    
                     item = ExtractedLineItem(
                         service_date=current_date,
-                        candidate_id=current_file_number or current_candidate_name,
+                        candidate_id=current_file_number or "UNKNOWN",
                         candidate_name=current_candidate_name,
                         amount=amount,
                         service_description=description,

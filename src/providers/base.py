@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, List, Optional
 from datetime import datetime
 import hashlib
+import re
 import PyPDF2
 import pdfplumber
 from src.logger import get_logger
@@ -16,15 +17,61 @@ from PIL import Image
 logger = get_logger()
 
 
-def generate_fingerprint_id(date: str, candidate_id: str, name: str, amount: float, service_description: str) -> str:
+def normalize_description(description: str) -> str:
     """
-    Generates a unique hash based on Date, Patient ID, Name, Amount, and Service Description.
+    Normalize service description for duplicate detection.
+    Removes extra whitespace, converts to lowercase, and removes common variations.
+    
+    Args:
+        description: Raw service description
+        
+    Returns:
+        Normalized description string
+    """
+    if not description:
+        return ""
+    
+    # Convert to lowercase and normalize whitespace
+    normalized = description.lower().strip()
+    normalized = re.sub(r'\s+', ' ', normalized)
+    
+    # Remove common punctuation and extra characters
+    normalized = re.sub(r'[^\w\s\-]', '', normalized)
+    
+    # Remove trailing/leading hyphens
+    normalized = normalized.strip('-').strip()
+    
+    return normalized
+
+
+def generate_fingerprint_id(date: str, candidate_id: str, amount: float, service_description: str) -> str:
+    """
+    Generates a unique hash for duplicate detection based on:
+    - Date (service date)
+    - Candidate ID (SSN or Chain ID - reliable identifier)
+    - Amount (exact to 2 decimal places)
+    - Normalized Service Description (for distinguishing different services)
+    
+    Note: We don't use candidate_name for fingerprinting as it's unreliable and causes parsing overhead.
+    Candidate ID is already unique and sufficient for duplicate detection.
+    
+    Args:
+        date: Service date (normalized format)
+        candidate_id: Candidate ID (SSN or Chain ID)
+        amount: Service amount (will be formatted to 2 decimals)
+        service_description: Service description (will be normalized)
+        
+    Returns:
+        MD5 hash string for duplicate detection
     """
     # Format amount to 2 decimal places to avoid floating point mismatch
     amount_str = "{:.2f}".format(amount)
     
-    # Create raw string: "<date>|<candidate_id>|<name>|<amount>|<service_description>"
-    raw_string = f"{date}|{candidate_id}|{name}|{amount_str}|{service_description}"
+    # Normalize description for consistent fingerprinting
+    normalized_desc = normalize_description(service_description)
+    
+    # Create raw string: "<date>|<candidate_id>|<amount>|<normalized_description>"
+    raw_string = f"{date}|{candidate_id}|{amount_str}|{normalized_desc}"
     
     # Return MD5 hash
     return hashlib.md5(raw_string.encode('utf-8')).hexdigest()
@@ -99,8 +146,12 @@ class ExtractedLineItem:
 
     @property
     def fingerprint(self) -> str:
-        """Generate a unique fingerprint for duplicate detection."""
-        return generate_fingerprint_id(self.service_date, self.candidate_id, self.candidate_name, self.amount, self.service_description)
+        """
+        Generate a unique fingerprint for duplicate detection.
+        Uses: date, candidate_id, amount, and normalized description.
+        Note: candidate_name is NOT used for fingerprinting as it's unreliable and causes parsing overhead.
+        """
+        return generate_fingerprint_id(self.service_date, self.candidate_id, self.amount, self.service_description)
 
 class ExtractedInvoice:
     """Represents extracted data from an invoice."""
@@ -286,6 +337,16 @@ class BaseProvider(ABC):
     def _parse_text_lines(self, lines: List[str]) -> List[ExtractedLineItem]:
         """
         Parse text lines into line items. Must be implemented by child classes.
+        Each provider should optimize for their specific PDF structure.
+        
+        For duplicate detection and total mismatch, only these fields are needed:
+        - service_date (normalized date)
+        - candidate_id (SSN, Chain ID, or other unique identifier)
+        - amount (exact amount to 2 decimal places)
+        - service_description (normalized description for fingerprinting)
+        
+        Note: candidate_name is NOT used for fingerprinting (see generate_fingerprint_id).
+        Extract it if needed for display, but it can be simplified to candidate_id for efficiency.
         
         Args:
             lines: List of text lines to parse

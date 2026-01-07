@@ -140,7 +140,8 @@ class QuestProvider(BaseProvider):
                 # Update State
                 current_date = candidate_match.group(1)
                 current_candidate_id = candidate_match.group(3)
-                current_candidate_name = candidate_match.group(4).strip()
+                # Optimized: Use ID as name (name not used for fingerprinting)
+                current_candidate_name = current_candidate_id
                 continue
                 
             # --- Pattern B: Service Line ---
@@ -159,11 +160,9 @@ class QuestProvider(BaseProvider):
                 description = service_match.group('desc').strip()
                 amount = float(service_match.group('amount').replace(',', ''))
                 
-                # Clean up description:
-                # Sometimes the description line starts with the candidate name if the PDF 
-                # formatting is tight. If description starts with the candidate name, strip it.
-                if current_candidate_name and description.startswith(current_candidate_name):
-                    description = description.replace(current_candidate_name, "").strip()
+                # Normalize description (first meaningful words for fingerprinting)
+                desc_words = description.split()[:5]  # First 5 words sufficient
+                description = ' '.join(desc_words).strip()
                 
                 # Final validation before adding
                 if not description:

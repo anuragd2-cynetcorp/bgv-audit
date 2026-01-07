@@ -125,14 +125,16 @@ class ScoutLogicProvider(BaseProvider):
                 if "XXX-XX-" in rest_of_line:
                     current_date = temp_date
                     
-                    # Split by SSN to get Name
-                    parts = re.split(r'XXX-XX-\d{4}', rest_of_line)
-                    current_candidate_name = parts[0].strip()
-                    
                     # Extract File # from the part after SSN
+                    parts = re.split(r'XXX-XX-\d{4}', rest_of_line)
                     if len(parts) > 1:
                         file_match = re.search(r'(\d+)\s*-?$', parts[1].strip())
                         current_file_number = file_match.group(1) if file_match else "UNKNOWN"
+                    else:
+                        current_file_number = "UNKNOWN"
+                    
+                    # Optimized: Use file number as name (name not used for fingerprinting)
+                    current_candidate_name = current_file_number
                     
                     # Reset pending state
                     pending_date = None
@@ -152,14 +154,16 @@ class ScoutLogicProvider(BaseProvider):
                 parts = re.split(r'XXX-XX-\d{4}', line)
                 name_part_2 = parts[0].strip()
                 
-                # Combine Date and Name
-                current_date = pending_date
-                current_candidate_name = f"{pending_name_part} {name_part_2}".strip()
-                
                 # Extract File #
+                current_date = pending_date
                 if len(parts) > 1:
                     file_match = re.search(r'(\d+)\s*-?$', parts[1].strip())
                     current_file_number = file_match.group(1) if file_match else "UNKNOWN"
+                else:
+                    current_file_number = "UNKNOWN"
+                
+                # Optimized: Use file number as name (name not used for fingerprinting)
+                current_candidate_name = current_file_number
                 
                 # Clear pending
                 pending_date = None
@@ -185,6 +189,10 @@ class ScoutLogicProvider(BaseProvider):
                         amount = float(amount_str)
                     except ValueError:
                         continue
+
+                    # Normalize description (first meaningful words for fingerprinting)
+                    desc_words = description.split()[:5]  # First 5 words sufficient
+                    description = ' '.join(desc_words).strip()
 
                     # Create Line Item
                     item = ExtractedLineItem(

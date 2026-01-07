@@ -114,8 +114,8 @@ class ConcentraProvider(BaseProvider):
                 
                 if date_match:
                     service_date = date_match.group(1)
-                    # Name is everything between Date and SSN
-                    candidate_name = pre_ssn[date_match.end():].strip()
+                    # Optimized: Use SSN as name (name not used for fingerprinting)
+                    candidate_name = candidate_id
                     
                     # --- Parse Right Side (Description + Amount) ---
                     # Look for Amount at the very end of the line
@@ -127,6 +127,9 @@ class ConcentraProvider(BaseProvider):
                         
                         # Description is everything between SSN and Amount
                         description = post_ssn[:amount_match.start()].strip()
+                        # Normalize description (first meaningful words for fingerprinting)
+                        desc_words = description.split()[:5]  # First 5 words sufficient
+                        description = ' '.join(desc_words).strip()
                         
                         # Create metadata
                         metadata = {
