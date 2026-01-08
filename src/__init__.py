@@ -1,6 +1,7 @@
 import os
 import traceback
 from flask import Flask, jsonify, render_template, request
+from werkzeug.middleware.proxy_fix import ProxyFix
 from src.config import Config
 from src.extensions import oauth
 from src.logger import get_logger
@@ -71,5 +72,16 @@ def create_app():
             return jsonify({'success': False, 'message': 'Resource not found'}), 404
         return render_template('error.html', error_code=404, error_message='Page Not Found'), 404
 
+    # 6. Apply ProxyFix (for reverse proxy support)
+    app.wsgi_app = ProxyFix(
+        app.wsgi_app,
+        x_for=0,   # usually you don't trust X-Forwarded-For unless needed
+        x_proto=1, # trust X-Forwarded-Proto
+        x_host=1,  # trust X-Forwarded-Host
+        x_port=0,  # usually not needed
+        x_prefix=0 # usually not needed
+    )
+
     return app
+
 
