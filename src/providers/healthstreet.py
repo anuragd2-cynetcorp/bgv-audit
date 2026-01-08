@@ -177,7 +177,7 @@ class HealthStreetProvider(BaseProvider):
                 service_description = normalize_description(service_description)
                 
                 item = ExtractedLineItem(
-                    candidate_name=candidate_id,  # Use ID as name for consistency
+                    candidate_name=candidate_name,  # Use actual name for display
                     candidate_id=candidate_id,
                     amount=amount,
                     service_date=service_date,

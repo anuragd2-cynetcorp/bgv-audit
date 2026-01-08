@@ -221,8 +221,14 @@ class InCheckProvider(BaseProvider):
                     else:
                         current_file_number = "UNKNOWN"
                     
-                    # Optimized: Use file number as name (name not used for fingerprinting)
-                    current_candidate_name = current_file_number
+                    # Extract actual name from buffer
+                    if candidate_name_buffer:
+                        # Join all collected name parts
+                        collected_name = ' '.join(candidate_name_buffer).strip()
+                        # Use collected name if available, otherwise use file number
+                        current_candidate_name = collected_name if collected_name else current_file_number
+                    else:
+                        current_candidate_name = current_file_number
                     
                     # Normalize date format (ensure consistent format)
                     if current_date:
@@ -238,8 +244,12 @@ class InCheckProvider(BaseProvider):
                 elif "$" in line or re.search(r'[\$]?[\d,]+\\.\d{2}', line):
                     # Safety Valve: We hit a price line but never found the SSN.
                     current_file_number = "UNKNOWN"
-                    # Optimized: Use file number as name (name not used for fingerprinting)
-                    current_candidate_name = current_file_number
+                    # Extract name from buffer if available
+                    if candidate_name_buffer:
+                        collected_name = ' '.join(candidate_name_buffer).strip()
+                        current_candidate_name = collected_name if collected_name else current_file_number
+                    else:
+                        current_candidate_name = current_file_number
                     capturing_candidate = False
                     candidate_name_buffer = []
                     # Fall through to State 3 to process this line as an item

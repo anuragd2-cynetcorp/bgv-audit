@@ -119,8 +119,13 @@ class DisaGlobalProvider(BaseProvider):
                         if not order_id:
                             continue  # Skip if no order ID found
                         
-                        # Optimized: Use order ID as name (name not used for fingerprinting)
-                        candidate_name = order_id
+                        # Extract candidate name from Subject column (column 2)
+                        candidate_name = row[2] if len(row) > 2 and row[2] else order_id
+                        # Use order ID as fallback if name is empty
+                        if not candidate_name or not candidate_name.strip():
+                            candidate_name = order_id
+                        else:
+                            candidate_name = candidate_name.strip()
                         
                         # Description: Extract from column 4 (Order Content)
                         # Handle multi-line descriptions and normalize

@@ -148,8 +148,20 @@ class FirstAdvantageProvider(BaseProvider):
             case_match = re.search(r'Case ID[:]?\s*(\d+)\s+', line, re.IGNORECASE)
             if case_match:
                 current_case_id = case_match.group(1)
-                # Optimized: Use Case ID as name (name not used for fingerprinting)
-                current_candidate_name = current_case_id
+                # Try to extract name from the line after Case ID
+                after_case = line[case_match.end():].strip()
+                # Look for name pattern (2-3 capitalized words)
+                # Remove common suffixes like "Ordered", "Date", etc.
+                name_match = re.search(r'([A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)', after_case)
+                if name_match:
+                    name = name_match.group(1).strip()
+                    # Clean up common suffixes
+                    name = re.sub(r'\s+Ordered.*$', '', name, flags=re.IGNORECASE)
+                    name = re.sub(r'\s+Date.*$', '', name, flags=re.IGNORECASE)
+                    current_candidate_name = name.strip()
+                else:
+                    # Fallback to Case ID if no name found
+                    current_candidate_name = current_case_id
                 # Reset date, look for it in this line or subsequent lines
                 current_service_date = None
                 

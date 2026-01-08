@@ -158,13 +158,51 @@ class QuestProvider(BaseProvider):
                 # Update State
                 current_date = candidate_match.group(1)
                 current_candidate_id = candidate_match.group(3)
-                # Optimized: Use ID as name (name not used for fingerprinting)
-                current_candidate_name = current_candidate_id
-                
-                # Check if this candidate line also contains a service (has 7-digit code and amount at the end)
-                # Pattern: description, 7-digit code, $amount at the end
                 rest_of_line = candidate_match.group(4)
+                
+                # Extract actual name from rest_of_line
+                # Name is typically the first 2-3 words before any service description
+                # Check if this candidate line also contains a service (has 7-digit code and amount at the end)
                 service_on_same_line = re.search(r'(.+?)\s+(\d{7})\s+\$([\d,]+\.\d{2})$', rest_of_line)
+                
+                if service_on_same_line:
+                    # Has service on same line - name is before the service description
+                    before_service = service_on_same_line.group(1).strip()
+                    # Name is typically first 2-3 words, but we need to be careful
+                    # Look for name pattern (capitalized words, typically 2-3 words)
+                    words = before_service.split()
+                    # Try to find where the name ends (before description starts)
+                    # Names are usually 2-3 capitalized words
+                    name_words = []
+                    for word in words[:4]:  # Check first 4 words max
+                        if word and word[0].isupper():
+                            name_words.append(word)
+                        else:
+                            break
+                    if len(name_words) >= 2:
+                        current_candidate_name = ' '.join(name_words[:3])  # Max 3 words for name
+                    elif len(name_words) == 1:
+                        current_candidate_name = name_words[0]
+                    else:
+                        # Fallback: use first 2 words
+                        current_candidate_name = ' '.join(words[:2]) if len(words) >= 2 else current_candidate_id
+                else:
+                    # No service on same line - rest_of_line might be just name or name + description
+                    # Extract first 2-3 capitalized words as name
+                    words = rest_of_line.split()
+                    name_words = []
+                    for word in words[:4]:  # Check first 4 words max
+                        if word and word[0].isupper():
+                            name_words.append(word)
+                        else:
+                            break
+                    if len(name_words) >= 2:
+                        current_candidate_name = ' '.join(name_words[:3])  # Max 3 words for name
+                    elif len(name_words) == 1:
+                        current_candidate_name = name_words[0]
+                    else:
+                        # Fallback: use first 2 words
+                        current_candidate_name = ' '.join(words[:2]) if len(words) >= 2 else current_candidate_id
                 
                 if service_on_same_line:
                     # Extract service from the same line

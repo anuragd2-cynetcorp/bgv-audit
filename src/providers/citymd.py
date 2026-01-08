@@ -129,9 +129,11 @@ class CityMDProvider(BaseProvider):
             # Pattern: "Patient:" followed by name, then "Patient ID:" followed by ID
             pat_match = re.search(r'Patient:\s*(.+?)\s+Patient ID:\s*(\d+)', line)
             if pat_match:
-                # Optimized: Use ID as name (name not used for fingerprinting)
+                # Extract actual patient name
+                patient_name = pat_match.group(1).strip()
                 current_candidate_id = pat_match.group(2).strip()
-                current_candidate_name = current_candidate_id
+                # Use actual name if available, otherwise use ID
+                current_candidate_name = patient_name if patient_name else current_candidate_id
                 continue
             
             # --- Extract Service Line ---

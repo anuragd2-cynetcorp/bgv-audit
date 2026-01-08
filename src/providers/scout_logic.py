@@ -155,8 +155,11 @@ class ScoutLogicProvider(BaseProvider):
                     else:
                         current_file_number = "UNKNOWN"
                     
-                    # Optimized: Use file number as name (name not used for fingerprinting)
-                    current_candidate_name = current_file_number
+                    # Extract name from pending_name_part if available
+                    if pending_name_part:
+                        current_candidate_name = pending_name_part.strip() if pending_name_part.strip() else current_file_number
+                    else:
+                        current_candidate_name = current_file_number
                     
                     # Reset pending state
                     pending_date = None
@@ -189,8 +192,12 @@ class ScoutLogicProvider(BaseProvider):
                 else:
                     current_file_number = "UNKNOWN"
                 
-                # Optimized: Use file number as name (name not used for fingerprinting)
-                current_candidate_name = current_file_number
+                # Extract actual name from pending_name_part and name_part_2
+                if pending_name_part or name_part_2:
+                    collected_name = ' '.join([p for p in [pending_name_part, name_part_2] if p]).strip()
+                    current_candidate_name = collected_name if collected_name else current_file_number
+                else:
+                    current_candidate_name = current_file_number
                 
                 # Clear pending
                 pending_date = None

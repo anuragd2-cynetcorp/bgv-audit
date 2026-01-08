@@ -129,8 +129,10 @@ class UniversalProvider(BaseProvider):
             if header_match:
                 current_date = header_match.group(1)
                 current_order_id = header_match.group(3)
-                # Optimized: Use order ID as name (name not used for fingerprinting)
-                current_candidate_name = current_order_id
+                # Extract actual name from group(2)
+                candidate_name = header_match.group(2).strip()
+                # Use actual name if available, otherwise use order ID
+                current_candidate_name = candidate_name if candidate_name else current_order_id
                 continue
 
             # --- Check for Subtotal Line (Skip) ---
