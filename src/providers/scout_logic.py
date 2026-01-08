@@ -134,6 +134,11 @@ class ScoutLogicProvider(BaseProvider):
             date_match = re.match(r'^(\d{2}/\d{2}/\d{4})\s+(.*)', line)
             
             if date_match:
+                # Reset previous candidate context when encountering a new date line
+                current_candidate_name = None
+                current_date = None
+                current_file_number = None
+                
                 temp_date = date_match.group(1)
                 rest_of_line = date_match.group(2)
                 
@@ -167,6 +172,11 @@ class ScoutLogicProvider(BaseProvider):
 
             # --- State 2: Check for SSN on current line (Multi-line continuation) ---
             if pending_date and "XXX-XX-" in line:
+                # Reset previous candidate context
+                current_candidate_name = None
+                current_date = None
+                current_file_number = None
+                
                 # This line contains the rest of the name and the SSN
                 parts = re.split(r'XXX-XX-\d{4}', line)
                 name_part_2 = parts[0].strip()
@@ -190,8 +200,14 @@ class ScoutLogicProvider(BaseProvider):
             # --- State 3: Extract Line Items ---
             # We only extract if we have a valid candidate context
             if current_candidate_name:
-                # Skip headers and subtotals
-                if any(x in line for x in ["DATE NAME SSN", "Subtotal for", "REPORT CHARGES"]):
+                # Skip headers and subtotals - more comprehensive filtering
+                skip_keywords = [
+                    "DATE NAME SSN", "Subtotal for", "REPORT CHARGES",
+                    "Total Amount Due", "Total Amount", "Amount Due",
+                    "Invoice Total", "Grand Total", "TOTAL", "Total:",
+                    "Summary", "Subtotal:", "Sub-total"
+                ]
+                if any(x in line.upper() for x in [kw.upper() for kw in skip_keywords]):
                     continue
                 
                 # Regex for Line Item: Description ... Amount
@@ -206,10 +222,19 @@ class ScoutLogicProvider(BaseProvider):
                         amount = float(amount_str)
                     except ValueError:
                         continue
+                    
+                    # Additional filtering: Skip if description looks like a total/subtotal line
+                    description_upper = description.upper()
+                    if any(x in description_upper for x in ["TOTAL", "SUBtotal", "AMOUNT DUE", "SUMMARY"]):
+                        continue
 
                     # Normalize description (first meaningful words for fingerprinting)
                     desc_words = description.split()[:5]  # First 5 words sufficient
                     description = ' '.join(desc_words).strip()
+                    
+                    # Skip empty descriptions
+                    if not description:
+                        continue
 
                     # Create Line Item
                     item = ExtractedLineItem(
