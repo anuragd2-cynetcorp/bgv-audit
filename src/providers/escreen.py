@@ -57,16 +57,33 @@ class EScreenProvider(BaseProvider):
             lines = self._get_text_lines(pdf_path, use_ocr=False)
             line_items = self._parse_text_lines(lines)
             
-            # If no line items found, try OCR fallback
+            # Check if extraction is complete by comparing sum with grand total
+            # If no line items found, or if sum doesn't match grand total (and we have a grand total), try OCR fallback
+            items_sum = sum(item.amount for item in line_items) if line_items else 0.0
+            should_try_ocr = False
+            
             if not line_items:
+                should_try_ocr = True
                 logger.info("No line items found with text extraction. Attempting OCR fallback for eScreen invoice.")
+            elif grand_total > 0.0 and abs(grand_total - items_sum) > 0.01:
+                should_try_ocr = True
+                logger.info(f"Text extraction found {len(line_items)} items with sum ${items_sum:.2f}, but grand total is ${grand_total:.2f}. Attempting OCR fallback for eScreen invoice.")
+            
+            if should_try_ocr:
                 try:
                     lines = self._get_text_lines(pdf_path, use_ocr=True)
-                    line_items = self._parse_text_lines(lines)
-                    logger.info(f"OCR extraction found {len(line_items)} line items.")
+                    ocr_line_items = self._parse_text_lines(lines)
+                    ocr_sum = sum(item.amount for item in ocr_line_items) if ocr_line_items else 0.0
+                    
+                    # Use OCR results if they're better (more items or closer to grand total)
+                    if not line_items or (grand_total > 0.0 and abs(grand_total - ocr_sum) < abs(grand_total - items_sum)):
+                        line_items = ocr_line_items
+                        logger.info(f"OCR extraction found {len(line_items)} line items with sum ${ocr_sum:.2f}.")
+                    elif line_items:
+                        logger.info(f"OCR extraction found {len(ocr_line_items)} items but text extraction had better match. Using text extraction results.")
                 except Exception as e:
                     logger.error(f"OCR extraction failed: {str(e)}", exc_info=True)
-                    # Continue to raise the original error if OCR also fails
+                    # Continue with text extraction results if OCR fails
         
         if not line_items:
             raise ValueError("Could not extract line items. Format may have changed or file is scanned.")
@@ -218,7 +235,12 @@ class EScreenProvider(BaseProvider):
                 ssn_pattern = re.compile(r'\s+(\d{4})\s+(\d{5,6})')
                 ssn_matches = list(ssn_pattern.finditer(merged_line))
             
-            # Pattern 4: No SSN, just Chain ID (8-10 digits numeric) - happens when SSN is "0000" or missing
+            # Pattern 4: SSN (4 digits) followed by very short Chain ID (3-4 digits) - less common but possible
+            if not ssn_matches:
+                ssn_pattern = re.compile(r'\s+(\d{4})\s+(\d{3,4})\s+')
+                ssn_matches = list(ssn_pattern.finditer(merged_line))
+            
+            # Pattern 5: No SSN, just Chain ID (8-10 digits numeric) - happens when SSN is "0000" or missing
             if not ssn_matches:
                 # Look for Chain ID (8-10 digits) directly after name
                 # But make sure it's not part of a date or other field
@@ -244,6 +266,45 @@ class EScreenProvider(BaseProvider):
                                 return self.groups[1]
                             return None
                     ssn_match = ChainIDMatch(ssn, chain_id, chain_id_match.start())
+                    ssn_matches = [ssn_match]
+            
+            # Pattern 6: Fallback - look for any 4+ digit number as potential ID
+            # This is less strict but helps catch edge cases
+            if not ssn_matches:
+                # Look for any sequence of 4+ digits that appears after the date
+                # This is a fallback for cases where the pattern doesn't match exactly
+                fallback_pattern = re.compile(r'\s+(\d{4,})\s+')
+                fallback_matches = list(fallback_pattern.finditer(merged_line, date_match.end()))
+                
+                if fallback_matches:
+                    # Use the first 4-digit+ sequence as potential ID
+                    fallback_match = fallback_matches[0]
+                    id_str = fallback_match.group(1)
+                    
+                    # If it's 4 digits, treat as SSN, otherwise as Chain ID
+                    if len(id_str) == 4:
+                        ssn = id_str
+                        # Try to find Chain ID after SSN
+                        chain_id_match = fallback_pattern.search(merged_line, fallback_match.end())
+                        chain_id = chain_id_match.group(1) if chain_id_match else id_str
+                    else:
+                        ssn = "0000"
+                        chain_id = id_str
+                    
+                    # Create a match object for compatibility
+                    class FallbackMatch:
+                        def __init__(self, ssn, chain_id, start_pos):
+                            self.groups = [ssn, chain_id]
+                            self.start_pos = start_pos
+                        def start(self):
+                            return self.start_pos
+                        def group(self, n):
+                            if n == 1:
+                                return self.groups[0]
+                            elif n == 2:
+                                return self.groups[1]
+                            return None
+                    ssn_match = FallbackMatch(ssn, chain_id, fallback_match.start())
                     ssn_matches = [ssn_match]
             
             if not ssn_matches:

@@ -79,16 +79,33 @@ class FirstAdvantageProvider(BaseProvider):
             lines = self._get_text_lines(pdf_path, use_ocr=False)
             line_items = self._parse_text_lines(lines)
             
-            # If no line items found, try OCR fallback
+            # Check if extraction is complete by comparing sum with grand total
+            # If no line items found, or if sum doesn't match grand total (and we have a grand total), try OCR fallback
+            items_sum = sum(item.amount for item in line_items) if line_items else 0.0
+            should_try_ocr = False
+            
             if not line_items:
+                should_try_ocr = True
                 logger.info("No line items found with text extraction. Attempting OCR fallback for First Advantage invoice.")
+            elif grand_total > 0.0 and abs(grand_total - items_sum) > 0.01:
+                should_try_ocr = True
+                logger.info(f"Text extraction found {len(line_items)} items with sum ${items_sum:.2f}, but grand total is ${grand_total:.2f}. Attempting OCR fallback for First Advantage invoice.")
+            
+            if should_try_ocr:
                 try:
                     lines = self._get_text_lines(pdf_path, use_ocr=True)
-                    line_items = self._parse_text_lines(lines)
-                    logger.info(f"OCR extraction found {len(line_items)} line items.")
+                    ocr_line_items = self._parse_text_lines(lines)
+                    ocr_sum = sum(item.amount for item in ocr_line_items) if ocr_line_items else 0.0
+                    
+                    # Use OCR results if they're better (more items or closer to grand total)
+                    if not line_items or (grand_total > 0.0 and abs(grand_total - ocr_sum) < abs(grand_total - items_sum)):
+                        line_items = ocr_line_items
+                        logger.info(f"OCR extraction found {len(line_items)} line items with sum ${ocr_sum:.2f}.")
+                    elif line_items:
+                        logger.info(f"OCR extraction found {len(ocr_line_items)} items but text extraction had better match. Using text extraction results.")
                 except Exception as e:
                     logger.error(f"OCR extraction failed: {str(e)}", exc_info=True)
-                    # Continue to raise the original error if OCR also fails
+                    # Continue with text extraction results if OCR fails
         
         if not line_items:
             raise ValueError("Could not extract line items. Format may have changed.")
