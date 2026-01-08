@@ -76,28 +76,46 @@ def upload_invoice():
     """
     # Enhanced logging for debugging file upload issues
     logger.info(f"Upload request received. Content-Type: {request.content_type}")
+    logger.info(f"Request method: {request.method}")
+    logger.info(f"Request content length: {request.content_length}")
     logger.info(f"Request files keys: {list(request.files.keys())}")
+    logger.info(f"Request files dict: {dict(request.files)}")
     logger.info(f"Request form keys: {list(request.form.keys())}")
+    logger.info(f"Request form dict: {dict(request.form)}")
+    logger.info(f"Request headers: {dict(request.headers)}")
     
-    # Check if request is multipart/form-data
+    # Warn if Content-Type doesn't match (but don't fail - Cloud Run proxy might modify it)
     if not request.content_type or 'multipart/form-data' not in request.content_type:
-        logger.error(f"Invalid Content-Type: {request.content_type}. Expected multipart/form-data")
+        logger.warning(f"Content-Type may be incorrect: {request.content_type}. Expected multipart/form-data")
+        # Don't fail here - continue to check if files are present
+    
+    # Check if request.files is empty (might indicate parsing issue)
+    if not request.files:
+        logger.error("request.files is completely empty - multipart data may not be parsed correctly")
+        logger.error(f"Request has_data: {request.data is not None}, data length: {len(request.data) if request.data else 0}")
         return jsonify({
             'success': False,
-            'message': 'Invalid request format. Please ensure the file is uploaded correctly.'
+            'message': 'File upload failed. Please ensure the file is selected and try again.'
         }), 400
     
     # Check if file is in request
     if 'file' not in request.files:
         logger.warning("'file' key not found in request.files")
         logger.warning(f"Available keys in request.files: {list(request.files.keys())}")
-        logger.warning(f"Request content length: {request.content_length}")
-        return jsonify({
-            'success': False,
-            'message': 'No file provided'
-        }), 400
+        # Try to get the first file if 'file' key doesn't exist
+        if request.files:
+            first_key = list(request.files.keys())[0]
+            logger.warning(f"Found file with key '{first_key}' instead of 'file'")
+            # Use the first available file
+            file = request.files[first_key]
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'No file provided'
+            }), 400
+    else:
+        file = request.files['file']
     
-    file = request.files['file']
     provider_name = request.form.get('provider_name', '').strip()
     
     # Check if file was actually selected

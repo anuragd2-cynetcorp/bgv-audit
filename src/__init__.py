@@ -44,7 +44,9 @@ def create_app():
     def log_request_info():
         """Log request information for debugging."""
         logger.info(f"Request: {request.method} {request.path}")
-        if request.form:
+        # Don't access request.form here for multipart requests - it might interfere with file parsing
+        # Only log form data for non-file upload requests
+        if request.path != '/upload' and request.form:
             logger.debug(f"Form data: {dict(request.form)}")
 
     # 5. Global Error Handlers
@@ -75,6 +77,17 @@ def create_app():
         if request.is_json:
             return jsonify({'success': False, 'message': 'Resource not found'}), 404
         return render_template('error.html', error_code=404, error_message='Page Not Found'), 404
+    
+    @app.errorhandler(413)
+    def request_entity_too_large(error):
+        """Handle 413 Request Entity Too Large errors."""
+        logger.error(f"413 Error: File too large. Content-Length: {request.content_length}")
+        if request.path.startswith('/upload'):
+            return jsonify({
+                'success': False,
+                'message': 'File is too large. Maximum size is 50MB.'
+            }), 413
+        return render_template('error.html', error_code=413, error_message='File Too Large'), 413
 
     # 6. Apply ProxyFix (for reverse proxy support)
     app.wsgi_app = ProxyFix(

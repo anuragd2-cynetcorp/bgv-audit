@@ -109,8 +109,33 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const providerName = uploadForm.querySelector('#provider_name')?.value || '';
         const fileInput = uploadForm.querySelector('#file');
-        const filename = fileInput?.files?.[0]?.name || '';
+        const file = fileInput?.files?.[0];
+        const filename = file?.name || '';
+        
+        // Validate file is selected BEFORE doing anything else
+        if (!file) {
+            console.error('No file selected');
+            isSubmitting = false;
+            alert('Please select a PDF file to upload.');
+            return false;
+        }
+        
         const startedAt = performance.now();
+        
+        // Create FormData BEFORE disabling inputs or closing modal
+        // This ensures the file is included in the FormData
+        const formData = new FormData(uploadForm);
+        
+        // Verify file is in FormData (for debugging)
+        if (!formData.has('file')) {
+            console.error('File not found in FormData');
+            isSubmitting = false;
+            alert('File upload error. Please try selecting the file again.');
+            return false;
+        }
+        
+        // Log file info for debugging
+        console.log('File selected:', filename, 'Size:', file.size, 'bytes');
         
         // Disable submit and cancel buttons to prevent multiple submissions
         if (submitBtn) {
@@ -124,9 +149,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // Disable form inputs to prevent changes during submission
-        const formInputs = uploadForm.querySelectorAll('input, select, button[type="submit"]');
+        // BUT don't disable the file input - it's already been captured in FormData
+        const formInputs = uploadForm.querySelectorAll('input:not([type="file"]), select, button[type="submit"]');
         formInputs.forEach(input => {
-            if (input.id !== 'cancelBtn') { // Keep cancel enabled for now (it's handled separately)
+            if (input.id !== 'cancelBtn') {
                 input.disabled = true;
             }
         });
@@ -149,9 +175,6 @@ document.addEventListener('DOMContentLoaded', function() {
             stopLoaderEngagement({ finalText: 'Starting...' });
         }
         stopLoaderEngagement = startLoaderEngagementLoop({ providerName, filename });
-        
-        // Create FormData
-        const formData = new FormData(uploadForm);
         
         // Make AJAX request
         fetch(uploadUrl, {
