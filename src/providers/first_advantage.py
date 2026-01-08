@@ -126,8 +126,9 @@ class FirstAdvantageProvider(BaseProvider):
             line = line.strip()
             
             # --- State Change: New Case Header ---
-            # Pattern: "Case ID: <id> <name> Ordered:"
-            case_match = re.search(r'Case ID:\s*(\d+)\s+(.+?)\s+(?:Ordered:|$)', line)
+            # Pattern 1: "Case ID: <id> <name> Ordered: <date> <amount>" (with or without pipes)
+            # More flexible pattern to handle different formats
+            case_match = re.search(r'Case ID[:]?\s*(\d+)\s+', line, re.IGNORECASE)
             if case_match:
                 current_case_id = case_match.group(1)
                 # Optimized: Use Case ID as name (name not used for fingerprinting)
@@ -135,10 +136,15 @@ class FirstAdvantageProvider(BaseProvider):
                 # Reset date, look for it in this line or subsequent lines
                 current_service_date = None
                 
-                # Check if date is on the same line
+                # Check if date is on the same line (more flexible pattern)
                 date_match = re.search(r'(\d{1,2}/\d{1,2}/\d{4})', line)
                 if date_match:
-                    current_service_date = date_match.group(1)
+                    date_str = date_match.group(1)
+                    # Normalize date format (ensure consistent format)
+                    date_parts = date_str.split('/')
+                    if len(date_parts) == 3:
+                        month, day, year = date_parts
+                        current_service_date = f"{month.zfill(2)}/{day.zfill(2)}/{year}"
                 continue
 
             # --- Capture Date if on subsequent line ---
@@ -146,11 +152,23 @@ class FirstAdvantageProvider(BaseProvider):
             if current_case_id and not current_service_date:
                 date_match = re.search(r'^\s*(\d{1,2}/\d{1,2}/\d{4})\s*$', line)
                 if date_match:
-                    current_service_date = date_match.group(1)
+                    date_str = date_match.group(1)
+                    # Normalize date format
+                    date_parts = date_str.split('/')
+                    if len(date_parts) == 3:
+                        month, day, year = date_parts
+                        current_service_date = f"{month.zfill(2)}/{day.zfill(2)}/{year}"
                     continue
 
             # --- Skip Headers/Noise ---
-            if any(x in line for x in ["Package Products:", "Other Fees:", "Source Fees:", "Custom Package", "Qty Price Ext Price"]):
+            # More comprehensive list of headers to skip
+            skip_keywords = [
+                "Package Products:", "Other Fees:", "Source Fees:",
+                "Custom Package", "Qty Price Ext Price",
+                "Additional Products:", "Products:", "Background Services",
+                "Ordered By:", "Background Services Total"
+            ]
+            if any(x in line for x in skip_keywords):
                 continue
             
             # --- Extract Line Items ---
@@ -158,56 +176,111 @@ class FirstAdvantageProvider(BaseProvider):
             if current_case_id:
                 
                 # Pattern A: Standard Line Item (Description | Qty | Unit Price | Ext Price)
-                std_match = re.search(r'^(.+?)\s+(\d+)\s+\$([\d,]+\.\d{2})\s+\$([\d,]+\.\d{2})$', line)
+                # More flexible - handle optional $ signs and spacing variations
+                std_match = re.search(r'^(.+?)\s+(\d+)\s+\$?([\d,]+\.\d{2})\s+\$?([\d,]+\.\d{2})\s*$', line)
                 
                 if std_match:
                     description = std_match.group(1).strip()
-                    amount = float(std_match.group(4).replace(',', ''))
+                    try:
+                        amount = float(std_match.group(4).replace(',', ''))
+                    except ValueError:
+                        amount = None
                     
-                    # Normalize description (first meaningful words for fingerprinting)
-                    desc_words = description.split()[:5]  # First 5 words sufficient
-                    description = ' '.join(desc_words).strip()
-                    
-                    item = ExtractedLineItem(
-                        service_date=current_service_date or "",
-                        candidate_id=current_case_id,
-                        candidate_name=current_candidate_name,
-                        amount=amount,
-                        service_description=description,
-                        metadata={
-                            "quantity": std_match.group(2),
-                            "unit_price": std_match.group(3)
-                        }
-                    )
-                    line_items.append(item)
-                    continue
+                    if amount is not None:
+                        # Normalize description (first meaningful words for fingerprinting)
+                        desc_words = description.split()[:5]  # First 5 words sufficient
+                        description = ' '.join(desc_words).strip()
+                        
+                        # Filter out empty descriptions or subtotal lines
+                        if not description or description.lower() in ['subtotal', 'total', '']:
+                            continue
+                        
+                        item = ExtractedLineItem(
+                            service_date=current_service_date or "",
+                            candidate_id=current_case_id,
+                            candidate_name=current_candidate_name,
+                            amount=amount,
+                            service_description=description,
+                            metadata={
+                                "quantity": std_match.group(2),
+                                "unit_price": std_match.group(3)
+                            }
+                        )
+                        line_items.append(item)
+                        continue
                 
-                # Pattern B: Source Fees / One-off items (Description | Ext Price)
-                source_match = re.search(r'^(.+?)\s+\$([\d,]+\.\d{2})$', line)
+                # Pattern B: Source Fees / One-off items
+                # Handle multi-column format: "Description | Name | Location | Amount"
+                # Also handle simple format: "Description | Amount"
+                
+                # First try multi-column source fee pattern (with pipes)
+                source_multi_match = re.search(r'^(.+?)\s*\|\s*.+?\s+\$?([\d,]+\.\d{2})\s*$', line)
+                if source_multi_match:
+                    description = source_multi_match.group(1).strip()
+                    try:
+                        amount = float(source_multi_match.group(2).replace(',', ''))
+                    except ValueError:
+                        amount = None
+                    
+                    if amount is not None:
+                        # Filter out sub-totals or headers
+                        if any(x in description.upper() for x in ["TOTAL", "INVOICE", "SUBtotal"]):
+                            continue
+
+                        # Normalize description (first meaningful words for fingerprinting)
+                        desc_words = description.split()[:5]  # First 5 words sufficient
+                        description = ' '.join(desc_words).strip()
+                        
+                        if description:  # Only add if we have a description
+                            item = ExtractedLineItem(
+                                service_date=current_service_date or "",
+                                candidate_id=current_case_id,
+                                candidate_name=current_candidate_name,
+                                amount=amount,
+                                service_description=description,
+                                metadata={
+                                    "type": "Source Fee/Other"
+                                }
+                            )
+                            line_items.append(item)
+                            continue
+                
+                # Pattern C: Simple Source Fees (Description | Ext Price) - no pipes
+                source_match = re.search(r'^(.+?)\s+\$?([\d,]+\.\d{2})\s*$', line)
                 
                 if source_match:
                     description = source_match.group(1).strip()
-                    amount = float(source_match.group(2).replace(',', ''))
+                    try:
+                        amount = float(source_match.group(2).replace(',', ''))
+                    except ValueError:
+                        amount = None
                     
-                    # Filter out sub-totals or headers that might match this pattern
-                    if "Total" in description or "Invoice" in description:
-                        continue
+                    if amount is not None:
+                        # Filter out sub-totals or headers that might match this pattern
+                        if any(x in description.upper() for x in ["TOTAL", "INVOICE", "SUBtotal", "BACKGROUND SERVICES"]):
+                            continue
+                        
+                        # Skip if it looks like a table row with multiple columns (has numbers but not quantity/price format)
+                        # Check if description is too short or contains numbers (might be part of table structure)
+                        if len(description) < 3:
+                            continue
 
-                    # Normalize description (first meaningful words for fingerprinting)
-                    desc_words = description.split()[:5]  # First 5 words sufficient
-                    description = ' '.join(desc_words).strip()
-
-                    item = ExtractedLineItem(
-                        service_date=current_service_date or "",
-                        candidate_id=current_case_id,
-                        candidate_name=current_candidate_name,
-                        amount=amount,
-                        service_description=description,
-                        metadata={
-                            "type": "Source Fee/Other"
-                        }
-                    )
-                    line_items.append(item)
+                        # Normalize description (first meaningful words for fingerprinting)
+                        desc_words = description.split()[:5]  # First 5 words sufficient
+                        description = ' '.join(desc_words).strip()
+                        
+                        if description:  # Only add if we have a description
+                            item = ExtractedLineItem(
+                                service_date=current_service_date or "",
+                                candidate_id=current_case_id,
+                                candidate_name=current_candidate_name,
+                                amount=amount,
+                                service_description=description,
+                                metadata={
+                                    "type": "Source Fee/Other"
+                                }
+                            )
+                            line_items.append(item)
         
         return line_items
     
