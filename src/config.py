@@ -15,4 +15,15 @@ class Config:
     # File upload configuration
     # Set max content length to 50MB (for large PDF files)
     MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB in bytes
+    
+    # OCR processing configuration
+    # Number of pages to process in each batch during OCR (default: 3)
+    # Lower values use less memory but are slower. Higher values are faster but use more memory.
+    OCR_BATCH_SIZE = int(os.environ.get('OCR_BATCH_SIZE', '3'))
+    
+    # DPI for OCR image conversion (default: 200)
+    # Lower DPI (e.g., 200) uses ~55% less memory and is ~30% faster, but may reduce accuracy for small text
+    # Higher DPI (e.g., 300) provides better accuracy but uses more memory
+    # Recommended: 200 for most invoices, 300 for small text or poor quality scans
+    OCR_DPI = int(os.environ.get('OCR_DPI', '200'))
 
