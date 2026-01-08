@@ -11,4 +11,8 @@ class Config:
     # Allow HTTP for OAuth locally (Remove this in production if using HTTPS)
     OAUTHLIB_INSECURE_TRANSPORT = os.environ.get('OAUTHLIB_INSECURE_TRANSPORT', '0')
     DB_ROOT_PATH = "workspaces/bgv-audit"
+    
+    # File upload configuration
+    # Set max content length to 50MB (for large PDF files)
+    MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB in bytes
 

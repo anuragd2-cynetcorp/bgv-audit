@@ -15,7 +15,7 @@ main_bp = Blueprint('main', __name__)
 
 # Configure upload settings
 ALLOWED_EXTENSIONS = {'pdf'}
-UPLOAD_FOLDER = tempfile.gettempdir()  # Use temp directory for uploads
+# Use NamedTemporaryFile for more reliable cross-platform temp file handling
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -74,7 +74,24 @@ def upload_invoice():
     Handle invoice PDF upload and processing.
     Returns JSON response for AJAX requests.
     """
+    # Enhanced logging for debugging file upload issues
+    logger.info(f"Upload request received. Content-Type: {request.content_type}")
+    logger.info(f"Request files keys: {list(request.files.keys())}")
+    logger.info(f"Request form keys: {list(request.form.keys())}")
+    
+    # Check if request is multipart/form-data
+    if not request.content_type or 'multipart/form-data' not in request.content_type:
+        logger.error(f"Invalid Content-Type: {request.content_type}. Expected multipart/form-data")
+        return jsonify({
+            'success': False,
+            'message': 'Invalid request format. Please ensure the file is uploaded correctly.'
+        }), 400
+    
+    # Check if file is in request
     if 'file' not in request.files:
+        logger.warning("'file' key not found in request.files")
+        logger.warning(f"Available keys in request.files: {list(request.files.keys())}")
+        logger.warning(f"Request content length: {request.content_length}")
         return jsonify({
             'success': False,
             'message': 'No file provided'
@@ -83,7 +100,9 @@ def upload_invoice():
     file = request.files['file']
     provider_name = request.form.get('provider_name', '').strip()
     
-    if file.filename == '':
+    # Check if file was actually selected
+    if file.filename == '' or not file.filename:
+        logger.warning("File filename is empty")
         return jsonify({
             'success': False,
             'message': 'No file selected'
@@ -110,11 +129,20 @@ def upload_invoice():
             'message': 'Invalid file type. Only PDF files are allowed.'
         }), 400
     
+    # Use NamedTemporaryFile for reliable cross-platform temp file handling
+    temp_file = None
+    temp_path = None
+    
     try:
-        # Save uploaded file temporarily
+        # Save uploaded file to a temporary file
         filename = secure_filename(file.filename)
-        temp_path = os.path.join(UPLOAD_FOLDER, filename)
+        # Use NamedTemporaryFile which handles permissions and cleanup better
+        # delete=False because we need to keep it until processing is done
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
+        temp_path = temp_file.name
         file.save(temp_path)
+        temp_file.close()  # Close the file handle so pdfplumber can open it
+        logger.info(f"File saved to temporary path: {temp_path}")
         
         # Get provider instance
         provider = get_provider_instance(provider_name)
@@ -130,10 +158,11 @@ def upload_invoice():
         except Exception as e:
             logger.error(f"Error extracting invoice data: {str(e)}", exc_info=True)
             # Clean up temp file
-            try:
-                os.remove(temp_path)
-            except:
-                pass
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except Exception as cleanup_error:
+                    logger.warning(f"Error cleaning up temp file: {cleanup_error}")
             return jsonify({
                 'success': False,
                 'message': 'Unable to extract data from the invoice PDF.',
@@ -156,10 +185,12 @@ def upload_invoice():
         audit_report = audit_service.audit_invoice(invoice.id, extracted=extracted)
         
         # Clean up temp file
-        try:
-            os.remove(temp_path)
-        except:
-            pass
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+                logger.info(f"Temporary file cleaned up: {temp_path}")
+            except Exception as cleanup_error:
+                logger.warning(f"Error cleaning up temp file: {cleanup_error}")
         
         return jsonify({
             'success': True,
@@ -171,6 +202,12 @@ def upload_invoice():
     
     except ValueError as e:
         logger.error(f"ValueError in upload_invoice: {str(e)}", exc_info=True)
+        # Clean up temp file on error
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except:
+                pass
         return jsonify({
             'success': False,
             'message': f'Processing error: {str(e)}',
@@ -178,6 +215,12 @@ def upload_invoice():
         }), 400
     except Exception as e:
         logger.error(f"Unexpected error in upload_invoice: {str(e)}", exc_info=True)
+        # Clean up temp file on error
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except:
+                pass
         return jsonify({
             'success': False,
             'message': f'Unexpected error: {str(e)}',
