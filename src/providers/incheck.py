@@ -59,16 +59,33 @@ class InCheckProvider(BaseProvider):
             lines = self._get_text_lines(pdf_path, use_ocr=False)
             line_items = self._parse_text_lines(lines)
             
-            # If no line items found, try OCR fallback
+            # Check if extraction is complete by comparing sum with grand total
+            # If no line items found, or if sum doesn't match grand total (and we have a grand total), try OCR fallback
+            items_sum = sum(item.amount for item in line_items) if line_items else 0.0
+            should_try_ocr = False
+            
             if not line_items:
+                should_try_ocr = True
                 logger.info("No line items found with text extraction. Attempting OCR fallback for InCheck invoice.")
+            elif grand_total > 0.0 and abs(grand_total - items_sum) > 0.01:
+                should_try_ocr = True
+                logger.info(f"Text extraction found {len(line_items)} items with sum ${items_sum:.2f}, but grand total is ${grand_total:.2f}. Attempting OCR fallback for InCheck invoice.")
+            
+            if should_try_ocr:
                 try:
                     lines = self._get_text_lines(pdf_path, use_ocr=True)
-                    line_items = self._parse_text_lines(lines)
-                    logger.info(f"OCR extraction found {len(line_items)} line items.")
+                    ocr_line_items = self._parse_text_lines(lines)
+                    ocr_sum = sum(item.amount for item in ocr_line_items) if ocr_line_items else 0.0
+                    
+                    # Use OCR results if they're better (more items or closer to grand total)
+                    if not line_items or (grand_total > 0.0 and abs(grand_total - ocr_sum) < abs(grand_total - items_sum)):
+                        line_items = ocr_line_items
+                        logger.info(f"OCR extraction found {len(line_items)} line items with sum ${ocr_sum:.2f}.")
+                    elif line_items:
+                        logger.info(f"OCR extraction found {len(ocr_line_items)} items but text extraction had better match. Using text extraction results.")
                 except Exception as e:
                     logger.error(f"OCR extraction failed: {str(e)}", exc_info=True)
-                    # Continue to raise the original error if OCR also fails
+                    # Continue with text extraction results if OCR fails
         
         if not line_items:
             raise ValueError("Could not extract line items from invoice. Format may have changed.")
@@ -112,7 +129,7 @@ class InCheckProvider(BaseProvider):
                 continue
             
             # --- State 1: Detect Start of Candidate Block ---
-            # Pattern: Date at start of line (MM/DD/YYYY)
+            # Pattern: Date at start of line (MM/DD/YYYY) - more flexible
             date_match = re.match(r'^\s*(\d{1,2}/\d{1,2}/\d{4})(?:\s+(.*))?$', line)
             
             if date_match:
@@ -126,7 +143,15 @@ class InCheckProvider(BaseProvider):
                 capturing_candidate = False
                 candidate_name_buffer = []
                 
-                current_date = date_match.group(1)
+                date_str = date_match.group(1)
+                # Normalize date format (ensure consistent format)
+                date_parts = date_str.split('/')
+                if len(date_parts) == 3:
+                    month, day, year = date_parts
+                    current_date = f"{month.zfill(2)}/{day.zfill(2)}/{year}"
+                else:
+                    current_date = date_str
+                
                 rest_of_line = date_match.group(2) or ""
                 
                 # Check for "Floating Name" (Name appeared on the line BEFORE the date)
@@ -137,21 +162,30 @@ class InCheckProvider(BaseProvider):
                 # Add text found on the same line as the date
                 if rest_of_line.strip():
                     # Check if this line contains the SSN placeholder (Single line header)
-                    if "XXX-XXX-XXXX" in rest_of_line:
-                        parts = rest_of_line.split("XXX-XXX-XXXX")
+                    # More flexible SSN pattern (case-insensitive, handle variations)
+                    ssn_match = re.search(r'XXX-XXX-XXXX|XXX[-\s]XXX[-\s]XXXX', rest_of_line, re.IGNORECASE)
+                    if ssn_match:
+                        ssn_text = ssn_match.group(0)
+                        parts = rest_of_line.split(ssn_text)
                         name_part = parts[0].strip()
                         if name_part:
                             candidate_name_buffer.append(name_part)
                         
-                        # Extract File # from right side
+                        # Extract File # from right side (more flexible pattern)
                         if len(parts) > 1:
-                            file_match = re.search(r'(\d+)(?:\s*-\s*)?$', parts[1].strip())
+                            file_match = re.search(r'(\d+)(?:\s*-\s*)?', parts[1].strip())
                             current_file_number = file_match.group(1) if file_match else "UNKNOWN"
                         else:
                             current_file_number = "UNKNOWN"
                         
                         # Optimized: Use file number as name (name not used for fingerprinting)
                         current_candidate_name = current_file_number
+                        
+                        # Normalize date format (ensure consistent format)
+                        date_parts = current_date.split('/')
+                        if len(date_parts) == 3:
+                            month, day, year = date_parts
+                            current_date = f"{month.zfill(2)}/{day.zfill(2)}/{year}"
                             
                         # We found everything in one go
                         capturing_candidate = False
@@ -170,16 +204,19 @@ class InCheckProvider(BaseProvider):
                 
             # --- State 2: Capture Multi-line Candidate Name ---
             if capturing_candidate:
-                if "XXX-XXX-XXXX" in line:
+                # More flexible SSN pattern (case-insensitive, handle variations)
+                ssn_match = re.search(r'XXX-XXX-XXXX|XXX[-\s]XXX[-\s]XXXX', line, re.IGNORECASE)
+                if ssn_match:
+                    ssn_text = ssn_match.group(0)
                     # Found the SSN line, closing the name capture
-                    parts = line.split("XXX-XXX-XXXX")
+                    parts = line.split(ssn_text)
                     name_continuation = parts[0].strip()
                     if name_continuation:
                         candidate_name_buffer.append(name_continuation)
                     
-                    # Extract File #
+                    # Extract File # (more flexible pattern)
                     if len(parts) > 1:
-                        file_match = re.search(r'(\d+)(?:\s*-\s*)?$', parts[1].strip())
+                        file_match = re.search(r'(\d+)(?:\s*-\s*)?', parts[1].strip())
                         current_file_number = file_match.group(1) if file_match else "UNKNOWN"
                     else:
                         current_file_number = "UNKNOWN"
@@ -187,11 +224,18 @@ class InCheckProvider(BaseProvider):
                     # Optimized: Use file number as name (name not used for fingerprinting)
                     current_candidate_name = current_file_number
                     
+                    # Normalize date format (ensure consistent format)
+                    if current_date:
+                        date_parts = current_date.split('/')
+                        if len(date_parts) == 3:
+                            month, day, year = date_parts
+                            current_date = f"{month.zfill(2)}/{day.zfill(2)}/{year}"
+                    
                     capturing_candidate = False
                     candidate_name_buffer = []
                     continue 
                 
-                elif "$" in line:
+                elif "$" in line or re.search(r'[\$]?[\d,]+\\.\d{2}', line):
                     # Safety Valve: We hit a price line but never found the SSN.
                     current_file_number = "UNKNOWN"
                     # Optimized: Use file number as name (name not used for fingerprinting)
@@ -212,31 +256,77 @@ class InCheckProvider(BaseProvider):
                     continue
                 
                 # Regex for Line Item: Description ... $Amount
-                item_match = re.search(r'^(.+?)\s+\$?([\d,]+\.\d{2})$', line)
+                # More flexible amount pattern - try multiple formats
+                amount_match = None
+                description = None
+                amount = None
                 
+                # Pattern 1: Amount at the end with $ sign
+                item_match = re.search(r'^(.+?)\s+\$([\d,]+\.\d{2})\s*$', line)
                 if item_match:
                     description = item_match.group(1).strip()
-                    amount = float(item_match.group(2).replace(',', ''))
-                    
+                    amount_str = item_match.group(2).replace(',', '')
+                    try:
+                        amount = float(amount_str)
+                    except ValueError:
+                        amount = None
+                
+                # Pattern 2: Amount at the end without $ sign
+                if amount is None:
+                    item_match = re.search(r'^(.+?)\s+([\d,]+\.\d{2})\s*$', line)
+                    if item_match:
+                        description = item_match.group(1).strip()
+                        amount_str = item_match.group(2).replace(',', '')
+                        try:
+                            amount = float(amount_str)
+                        except ValueError:
+                            amount = None
+                
+                # Pattern 3: More flexible - find amount anywhere near the end
+                if amount is None:
+                    amount_matches = list(re.finditer(r'[\$]?([\d,]+\.\d{2})', line))
+                    if amount_matches:
+                        # Use the last match (most likely to be the total price)
+                        amount_match = amount_matches[-1]
+                        amount_str = amount_match.group(1).replace(',', '')
+                        try:
+                            amount = float(amount_str)
+                            # Description is everything before the amount
+                            description = line[:amount_match.start()].strip()
+                        except ValueError:
+                            amount = None
+                
+                if amount is not None and description:
                     # Filter out headers/footers
-                    if "REPORT CHARGES" in description or "Total Amount Due" in description:
+                    if any(x in description.upper() for x in ["REPORT CHARGES", "TOTAL AMOUNT DUE", "SUBTOTAL"]):
                         continue
                     
                     # Normalize description (first meaningful words for fingerprinting)
                     desc_words = description.split()[:5]  # First 5 words sufficient
                     description = ' '.join(desc_words).strip()
                     
-                    item = ExtractedLineItem(
-                        service_date=current_date,
-                        candidate_id=current_file_number or "UNKNOWN",
-                        candidate_name=current_candidate_name,
-                        amount=amount,
-                        service_description=description,
-                        metadata={
-                            "file_number": current_file_number
-                        }
-                    )
-                    line_items.append(item)
+                    # Only add if we have a valid description
+                    if description:
+                        # Ensure we have a valid date (normalize if needed)
+                        service_date = current_date if current_date else ""
+                        if service_date:
+                            date_parts = service_date.split('/')
+                            if len(date_parts) == 3:
+                                month, day, year = date_parts
+                                service_date = f"{month.zfill(2)}/{day.zfill(2)}/{year}"
+                        
+                        item = ExtractedLineItem(
+                            service_date=service_date,
+                            candidate_id=current_file_number or "UNKNOWN",
+                            candidate_name=current_candidate_name,
+                            amount=amount,
+                            service_description=description,
+                            metadata={
+                                "file_number": current_file_number
+                            }
+                        )
+                        line_items.append(item)
+                    
                     # Reset potential floating name since we are processing items now
                     potential_floating_name = None
                     continue
