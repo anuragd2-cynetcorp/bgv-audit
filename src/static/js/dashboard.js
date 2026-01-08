@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     const uploadAlert = document.getElementById('uploadAlert');
     const fullPageLoader = document.getElementById('fullPageLoader');
+    const loaderRotatingText = document.getElementById('loaderRotatingText');
     const submitBtn = document.getElementById('submitBtn');
     const cancelBtn = document.getElementById('cancelBtn');
     const uploadModal = document.getElementById('uploadModal');
@@ -21,9 +22,83 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('Upload URL not found. Please set data-upload-url attribute on the form.');
         return;
     }
+
+    // ---- Full-page loader engagement (rotating text + timing stats) ----
+    let stopLoaderEngagement = null;
+
+    function setLoaderRotatingText(text) {
+        if (!loaderRotatingText) return;
+        loaderRotatingText.classList.remove('is-animating');
+        // Trigger reflow so animation restarts
+        // eslint-disable-next-line no-unused-expressions
+        loaderRotatingText.offsetHeight;
+        loaderRotatingText.textContent = text;
+        loaderRotatingText.classList.add('is-animating');
+    }
+
+    function formatElapsed(ms) {
+        const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    function startLoaderEngagementLoop({ providerName, filename }) {
+        // Fixed expectation: assume max ~5 minutes
+        const expectedMaxMs = 5 * 60 * 1000;
+        const startedAt = performance.now();
+
+        const friendlyProvider = providerName ? ` (${providerName})` : '';
+        const friendlyFile = filename ? ` • ${filename}` : '';
+
+        const milestones = [
+            { ms: 0, msg: `Uploading PDF${friendlyProvider}${friendlyFile}...` },
+            { ms: 10_000, msg: `Reading invoice text${friendlyProvider}...` },
+            { ms: 45_000, msg: `Extracting line items${friendlyProvider}...` },
+            { ms: 120_000, msg: `Auditing totals & duplicates...` },
+            { ms: 210_000, msg: `If needed, verifying via OCR...` },
+            { ms: 270_000, msg: `Still working — this can take a few minutes...` }
+        ];
+
+        let nextIdx = 0;
+        let stopped = false;
+
+        setLoaderRotatingText(milestones[0].msg);
+
+        const tick = () => {
+            if (stopped) return;
+            const elapsed = performance.now() - startedAt;
+
+            while (nextIdx + 1 < milestones.length && elapsed >= milestones[nextIdx + 1].ms) {
+                nextIdx += 1;
+                setLoaderRotatingText(milestones[nextIdx].msg);
+            }
+
+            // If we exceed expected max, keep user informed without spamming.
+            if (elapsed > expectedMaxMs && nextIdx === milestones.length - 1) {
+                // no-op; last milestone already covers "still working"
+            }
+        };
+
+        const intervalId = window.setInterval(tick, 500);
+
+        // Return a stopper
+        return ({ finalText } = {}) => {
+            stopped = true;
+            window.clearInterval(intervalId);
+            if (finalText) {
+                setLoaderRotatingText(finalText);
+            }
+        };
+    }
     
     uploadForm.addEventListener('submit', function(e) {
         e.preventDefault();
+
+        const providerName = uploadForm.querySelector('#provider_name')?.value || '';
+        const fileInput = uploadForm.querySelector('#file');
+        const filename = fileInput?.files?.[0]?.name || '';
+        const startedAt = performance.now();
         
         // Disable submit and cancel buttons to prevent multiple submissions
         if (submitBtn) {
@@ -48,6 +123,12 @@ document.addEventListener('DOMContentLoaded', function() {
         if (fullPageLoader) {
             fullPageLoader.classList.remove('d-none');
         }
+
+        // Start loader engagement loop (rotating text + stats)
+        if (typeof stopLoaderEngagement === 'function') {
+            stopLoaderEngagement({ finalText: 'Starting...' });
+        }
+        stopLoaderEngagement = startLoaderEngagementLoop({ providerName, filename });
         
         // Create FormData
         const formData = new FormData(uploadForm);
@@ -89,6 +170,10 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(data => {
             if (data.success) {
+                if (typeof stopLoaderEngagement === 'function') {
+                    stopLoaderEngagement({ finalText: 'Done. Opening invoice…' });
+                }
+
                 // Redirect to invoice detail page
                 // Keep loader visible during redirect to prevent flash of content
                 if (data.redirect_url) {
@@ -105,6 +190,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Hide loader and show error
                 if (fullPageLoader) {
                     fullPageLoader.classList.add('d-none');
+                }
+                if (typeof stopLoaderEngagement === 'function') {
+                    stopLoaderEngagement();
                 }
                 // Re-enable buttons on error
                 if (submitBtn) {
@@ -157,6 +245,9 @@ document.addEventListener('DOMContentLoaded', function() {
             // Hide full-page loader
             if (fullPageLoader) {
                 fullPageLoader.classList.add('d-none');
+            }
+            if (typeof stopLoaderEngagement === 'function') {
+                stopLoaderEngagement();
             }
             
             // Re-enable buttons on error

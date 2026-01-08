@@ -36,3 +36,27 @@
     padding: 0.35em 0.65em;
 }
 
+/* Full page loader: rotating status text */
+.loader-rotating-text {
+    min-height: 1.5rem;
+}
+
+.loader-rotating-text.is-animating {
+    animation: loaderFadeSlide 300ms ease;
+}
+
+.loader-timing-stats:empty {
+    display: none;
+}
+
+@keyframes loaderFadeSlide {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
