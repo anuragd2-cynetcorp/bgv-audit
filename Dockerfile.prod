@@ -18,12 +18,22 @@ RUN pip install --upgrade pip certifi
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/ src/
-COPY firebase_auth.json .
 
-# Copy entrypoint script
+# Build args for cache busting - these change on every build
+ARG BUILD_DATE=unknown
+ARG GIT_COMMIT=unknown
+
+# Copy entrypoints - Docker will detect file changes automatically
+# But we add build info to ensure fresh builds
 COPY entrypoints/ entrypoints/
+
+# Add build metadata (this ensures the layer after COPY is always fresh)
+RUN echo "Build: ${BUILD_DATE} / Commit: ${GIT_COMMIT}" > /app/.build-info && \
+    cat /app/.build-info
+
+# Make entrypoint executable
 RUN chmod +x entrypoints/web.sh
 
 EXPOSE 8080
-CMD ["./entrypoints/web.sh"]
+CMD ["entrypoints/web.sh"]
 
