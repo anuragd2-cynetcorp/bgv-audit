@@ -92,8 +92,20 @@ document.addEventListener('DOMContentLoaded', function() {
         };
     }
     
+    // Track if form submission is in progress to prevent multiple submissions
+    let isSubmitting = false;
+    
     uploadForm.addEventListener('submit', function(e) {
         e.preventDefault();
+        
+        // PREVENT MULTIPLE SUBMISSIONS: Check if already submitting
+        if (isSubmitting) {
+            console.warn('Form submission already in progress. Ignoring duplicate submission.');
+            return false;
+        }
+        
+        // Mark as submitting immediately
+        isSubmitting = true;
 
         const providerName = uploadForm.querySelector('#provider_name')?.value || '';
         const fileInput = uploadForm.querySelector('#file');
@@ -110,6 +122,14 @@ document.addEventListener('DOMContentLoaded', function() {
         if (cancelBtn) {
             cancelBtn.disabled = true;
         }
+        
+        // Disable form inputs to prevent changes during submission
+        const formInputs = uploadForm.querySelectorAll('input, select, button[type="submit"]');
+        formInputs.forEach(input => {
+            if (input.id !== 'cancelBtn') { // Keep cancel enabled for now (it's handled separately)
+                input.disabled = true;
+            }
+        });
         
         // Hide any previous alerts
         hideErrorInModal();
@@ -194,6 +214,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (typeof stopLoaderEngagement === 'function') {
                     stopLoaderEngagement();
                 }
+                // Reset submission flag on error
+                isSubmitting = false;
+                
                 // Re-enable buttons on error
                 if (submitBtn) {
                     submitBtn.disabled = false;
@@ -202,6 +225,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (cancelBtn) {
                     cancelBtn.disabled = false;
                 }
+                
+                // Re-enable form inputs (except buttons which are handled separately)
+                const formInputs = uploadForm.querySelectorAll('input[type="file"], select');
+                formInputs.forEach(input => {
+                    input.disabled = false;
+                });
                 
                 // Clean up error message
                 let errorMessage = data.message || 'An error occurred while processing the invoice.';
@@ -242,6 +271,9 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         })
         .catch(error => {
+            // Reset submission flag on error
+            isSubmitting = false;
+            
             // Hide full-page loader
             if (fullPageLoader) {
                 fullPageLoader.classList.add('d-none');
@@ -258,6 +290,12 @@ document.addEventListener('DOMContentLoaded', function() {
             if (cancelBtn) {
                 cancelBtn.disabled = false;
             }
+            
+            // Re-enable form inputs
+            const formInputs = uploadForm.querySelectorAll('input[type="file"], select');
+            formInputs.forEach(input => {
+                input.disabled = false;
+            });
             
             // Get provider name from error object or form
             const providerName = error.providerName || uploadForm.querySelector('#provider_name')?.value || '';
@@ -376,10 +414,25 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         
         uploadModal.addEventListener('hidden.bs.modal', function() {
+            // Reset form and submission state when modal is closed
             uploadForm.reset();
             hideErrorInModal();
-            if (submitBtn) submitBtn.disabled = false;
-            if (cancelBtn) cancelBtn.disabled = false;
+            isSubmitting = false; // Reset submission flag
+            
+            // Re-enable all form elements
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = submitBtn.dataset.originalText || '<i class="bi bi-upload me-2"></i>Upload & Process';
+            }
+            if (cancelBtn) {
+                cancelBtn.disabled = false;
+            }
+            
+            // Re-enable all form inputs
+            const formInputs = uploadForm.querySelectorAll('input, select, button[type="submit"]');
+            formInputs.forEach(input => {
+                input.disabled = false;
+            });
         });
     }
 });
