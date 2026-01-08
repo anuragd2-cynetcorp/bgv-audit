@@ -149,8 +149,9 @@ class QuestProvider(BaseProvider):
             line = line.strip()
             
             # --- Pattern A: New Candidate Line ---
-            # Regex: Date | Specimen | Patient ID | Name
-            # Format: "<date> <specimen_id> <patient_id> <name>"
+            # Format can be either:
+            # 1. "<date> <specimen_id> <patient_id> <name>" (without service)
+            # 2. "<date> <specimen_id> <patient_id> <name> <description> <7-digit-code> $<amount>" (with service on same line)
             candidate_match = re.match(r'^(\d{2}/\d{2}/\d{4})\s+(\d+)\s+([A-Z0-9]+)\s+(.*)', line)
             
             if candidate_match:
@@ -159,6 +160,41 @@ class QuestProvider(BaseProvider):
                 current_candidate_id = candidate_match.group(3)
                 # Optimized: Use ID as name (name not used for fingerprinting)
                 current_candidate_name = current_candidate_id
+                
+                # Check if this candidate line also contains a service (has 7-digit code and amount at the end)
+                # Pattern: description, 7-digit code, $amount at the end
+                rest_of_line = candidate_match.group(4)
+                service_on_same_line = re.search(r'(.+?)\s+(\d{7})\s+\$([\d,]+\.\d{2})$', rest_of_line)
+                
+                if service_on_same_line:
+                    # Extract service from the same line
+                    description = service_on_same_line.group(1).strip()
+                    code = service_on_same_line.group(2)
+                    amount_str = service_on_same_line.group(3).replace(',', '')
+                    
+                    try:
+                        amount = float(amount_str)
+                        
+                        # Normalize description (first meaningful words for fingerprinting)
+                        desc_words = description.split()[:5]  # First 5 words sufficient
+                        description = ' '.join(desc_words).strip()
+                        
+                        if description:
+                            # Create the standardized line item
+                            item = ExtractedLineItem(
+                                candidate_name=current_candidate_name or "Unknown",
+                                candidate_id=current_candidate_id,
+                                amount=amount,
+                                service_date=current_date,
+                                service_description=description,
+                                metadata={
+                                    "service_code": code
+                                }
+                            )
+                            line_items.append(item)
+                    except ValueError:
+                        pass  # Invalid amount, skip
+                
                 continue
                 
             # --- Pattern B: Service Line ---
