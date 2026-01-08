@@ -178,8 +178,14 @@ class InCheckProvider(BaseProvider):
                         else:
                             current_file_number = "UNKNOWN"
                         
-                        # Optimized: Use file number as name (name not used for fingerprinting)
-                        current_candidate_name = current_file_number
+                        # Extract actual name from buffer
+                        if candidate_name_buffer:
+                            # Join all collected name parts
+                            collected_name = ' '.join(candidate_name_buffer).strip()
+                            # Use collected name if available, otherwise use file number
+                            current_candidate_name = collected_name if collected_name else current_file_number
+                        else:
+                            current_candidate_name = current_file_number
                         
                         # Normalize date format (ensure consistent format)
                         date_parts = current_date.split('/')
