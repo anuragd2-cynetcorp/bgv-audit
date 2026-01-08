@@ -46,7 +46,7 @@ jobs:
             --allow-unauthenticated \
             --min-instances=1 \
             --max-instances=5 \
-            --set-secrets "FIREBASE_AUTH_JSON=firebase-auth:latest"
+            --set-secrets "FIREBASE_AUTH_JSON=firebase-auth:latest,DOCUMENTAI_AUTH=documentai-auth:latest"
 
       # Force Traffic to Latest Revision
       - name: Update Traffic to Latest
