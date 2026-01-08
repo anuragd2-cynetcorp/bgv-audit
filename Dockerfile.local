@@ -28,6 +28,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/ src/
 COPY firebase_auth.json .
+COPY documentai_auth.json .
 
 # Copy entrypoint script
 COPY entrypoints/ entrypoints/

@@ -7,6 +7,12 @@ if [ -n "$FIREBASE_AUTH_JSON" ]; then
     export GOOGLE_APPLICATION_CREDENTIALS=/app/firebase_auth.json
 fi
 
+# Write Document AI auth from GCP secret (DOCUMENTAI_AUTH)
+if [ -n "$DOCUMENTAI_AUTH" ]; then
+    echo "$DOCUMENTAI_AUTH" > /app/documentai_auth.json
+    export DOCUMENT_AI_CREDENTIALS=/app/documentai_auth.json
+fi
+
 # Start Gunicorn web server with proper logging
 exec gunicorn \
     --bind 0.0.0.0:8080 \

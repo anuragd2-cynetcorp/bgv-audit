@@ -6,6 +6,7 @@ from typing import List
 import os
 from google.cloud import documentai
 from google.api_core.client_options import ClientOptions
+from google.oauth2 import service_account
 from src.config import Config
 from src.logger import get_logger
 
@@ -24,9 +25,27 @@ class DocumentAIOCRService:
         self.location = Config.DOCUMENT_AI_LOCATION
         self.processor_id = Config.DOCUMENT_AI_PROCESSOR_ID
         
-        # Initialize the client with proper endpoint (matching rules-actions-django pattern)
+        # DOCUMENT_AI_CREDENTIALS is required - no fallback
+        documentai_creds_path = os.environ.get('DOCUMENT_AI_CREDENTIALS')
+        if not documentai_creds_path:
+            raise ValueError(
+                "DOCUMENT_AI_CREDENTIALS environment variable is required. "
+                "Please set DOCUMENT_AI_CREDENTIALS to the path of your Document AI service account JSON file."
+            )
+        
+        if not os.path.exists(documentai_creds_path):
+            raise FileNotFoundError(
+                f"Document AI credentials file not found: {documentai_creds_path}. "
+                "Please ensure DOCUMENT_AI_CREDENTIALS points to a valid service account JSON file."
+            )
+        
+        # Load credentials from Document AI specific file
+        credentials = service_account.Credentials.from_service_account_file(documentai_creds_path)
+        logger.info(f"Using Document AI credentials from: {documentai_creds_path}")
+        
+        # Initialize the client with proper endpoint
         opts = ClientOptions(api_endpoint=f"{self.location}-documentai.googleapis.com")
-        self.client = documentai.DocumentProcessorServiceClient(client_options=opts)
+        self.client = documentai.DocumentProcessorServiceClient(credentials=credentials, client_options=opts)
         
         # Get processor name (required - matching rules-actions-django pattern)
         if not self.processor_id:
@@ -57,9 +76,15 @@ class DocumentAIOCRService:
         if Config.DOCUMENT_AI_PROJECT_ID:
             return Config.DOCUMENT_AI_PROJECT_ID
         
-        # Try to get from GOOGLE_APPLICATION_CREDENTIALS
-        creds_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
-        if creds_path and os.path.exists(creds_path):
+        # Get from DOCUMENT_AI_CREDENTIALS (required)
+        creds_path = os.environ.get('DOCUMENT_AI_CREDENTIALS')
+        if not creds_path:
+            raise ValueError(
+                "DOCUMENT_AI_CREDENTIALS environment variable is required to determine project ID. "
+                "Either set DOCUMENT_AI_PROJECT_ID or ensure DOCUMENT_AI_CREDENTIALS is set."
+            )
+        
+        if os.path.exists(creds_path):
             import json
             try:
                 with open(creds_path, 'r') as f:
