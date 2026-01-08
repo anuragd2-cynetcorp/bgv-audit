@@ -333,8 +333,28 @@ class FastMedProvider(BaseProvider):
                 
                 # Optimized: Use SSN or HAR# as candidate_id (name not used for fingerprinting)
                 candidate_id = ssn if ssn else (har_number if har_number else "Unknown")
-                # Use ID as name for simplicity
-                candidate_name = candidate_id
+                # Extract actual name from name_clinic if available
+                # name_clinic might contain "Name Clinic" or just "Clinic"
+                if name_clinic:
+                    # Try to extract name (typically first 2-3 words before clinic name)
+                    name_clinic_parts = name_clinic.split()
+                    # If it looks like a name (2-3 capitalized words), use it
+                    if len(name_clinic_parts) >= 2:
+                        # Check if first part looks like a name (capitalized words)
+                        potential_name_parts = []
+                        for part in name_clinic_parts[:4]:  # Check first 4 parts
+                            if part and part[0].isupper() and not part.isdigit():
+                                potential_name_parts.append(part)
+                            else:
+                                break
+                        if len(potential_name_parts) >= 2:
+                            candidate_name = ' '.join(potential_name_parts[:3])  # Max 3 words
+                        else:
+                            candidate_name = candidate_id
+                    else:
+                        candidate_name = candidate_id
+                else:
+                    candidate_name = candidate_id
                 
                 # Normalize description (first meaningful words for fingerprinting)
                 full_description = f"{service_code} - {description}" if service_code else description

@@ -124,6 +124,9 @@ class ScoutLogicProvider(BaseProvider):
         pending_date = None
         pending_name_part = None
         
+        # Track previous line for name extraction
+        previous_line = None
+        
         for line in lines:
             line = line.strip()
             if not line:
@@ -142,21 +145,37 @@ class ScoutLogicProvider(BaseProvider):
                 temp_date = date_match.group(1)
                 rest_of_line = date_match.group(2)
                 
+                # Check if name is on previous line (common pattern in Scout Logic)
+                potential_name = None
+                if previous_line:
+                    prev_stripped = previous_line.strip()
+                    # Check if previous line looks like a name (contains comma and capitalized words)
+                    if prev_stripped and ',' in prev_stripped and not re.match(r'^\d{1,2}/\d{1,2}/\d{4}', prev_stripped) and 'XXX-XX-' not in prev_stripped:
+                        # Looks like a name (e.g., "ABERCROMBIE, ASHLEA")
+                        potential_name = prev_stripped
+                
                 # Check if SSN is on this line (Single Line Header)
                 # Pattern: masked SSN (XXX-XX-####)
                 if "XXX-XX-" in rest_of_line:
                     current_date = temp_date
                     
-                    # Extract File # from the part after SSN
+                    # Extract name from the part before SSN on current line
                     parts = re.split(r'XXX-XX-\d{4}', rest_of_line)
+                    name_part_from_line = parts[0].strip() if parts else ""
+                    
+                    # Extract File # from the part after SSN
                     if len(parts) > 1:
                         file_match = re.search(r'(\d+)\s*-?$', parts[1].strip())
                         current_file_number = file_match.group(1) if file_match else "UNKNOWN"
                     else:
                         current_file_number = "UNKNOWN"
                     
-                    # Extract name from pending_name_part if available
-                    if pending_name_part:
+                    # Priority: previous line name > name from current line > pending_name_part > file number
+                    if potential_name:
+                        current_candidate_name = potential_name
+                    elif name_part_from_line:
+                        current_candidate_name = name_part_from_line
+                    elif pending_name_part:
                         current_candidate_name = pending_name_part.strip() if pending_name_part.strip() else current_file_number
                     else:
                         current_candidate_name = current_file_number
@@ -164,13 +183,20 @@ class ScoutLogicProvider(BaseProvider):
                     # Reset pending state
                     pending_date = None
                     pending_name_part = None
+                    previous_line = line
                     
                 else:
                     # SSN not found -> Multi-line Header
                     # Store what we have and wait for next line
                     pending_date = temp_date
-                    pending_name_part = rest_of_line.strip()
+                    # Use previous line name if available, otherwise use rest_of_line
+                    if potential_name:
+                        pending_name_part = potential_name
+                    else:
+                        pending_name_part = rest_of_line.strip()
                 
+                # Update previous_line for next iteration
+                previous_line = line
                 continue
 
             # --- State 2: Check for SSN on current line (Multi-line continuation) ---
@@ -202,8 +228,13 @@ class ScoutLogicProvider(BaseProvider):
                 # Clear pending
                 pending_date = None
                 pending_name_part = None
+                previous_line = line
                 continue
 
+            # Update previous_line for non-date lines
+            if not date_match:
+                previous_line = line
+            
             # --- State 3: Extract Line Items ---
             # We only extract if we have a valid candidate context
             if current_candidate_name:
