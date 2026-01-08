@@ -58,7 +58,7 @@ The system supports extraction and auditing for the following providers:
 - Python 3.11+
 - Google Cloud Firestore (for database)
 - Google OAuth credentials (for authentication)
-- Tesseract OCR (for scanned PDF fallback)
+- Google Cloud Document AI API enabled (for OCR processing)
 
 ### Installation
 
@@ -117,7 +117,7 @@ docker-compose up -d
 - **Database**: Google Cloud Firestore
 - **Authentication**: Google OAuth (via Authlib)
 - **PDF Processing**: pdfplumber, PyPDF2
-- **OCR**: Tesseract (pytesseract) for scanned documents
+- **OCR**: Google Cloud Document AI (for scanned documents)
 - **Frontend**: Bootstrap 5, Vanilla JavaScript
 - **Deployment**: Docker, Gunicorn
 

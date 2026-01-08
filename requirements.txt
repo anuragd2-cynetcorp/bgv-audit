@@ -2,6 +2,7 @@ flask
 flask-cors
 fireo
 google-cloud-firestore
+google-cloud-documentai
 authlib
 requests
 gunicorn
@@ -9,8 +10,5 @@ python-dotenv
 flask-wtf
 pdfplumber
 PyPDF2
-pytesseract
-Pillow
-pdf2image
 
 

@@ -7,14 +7,10 @@ from typing import Dict, List, Optional
 from datetime import datetime
 import hashlib
 import re
-import gc
 import PyPDF2
 import pdfplumber
 from src.logger import get_logger
 from src.config import Config
-import pytesseract
-from pdf2image import convert_from_path
-from PIL import Image
 
 logger = get_logger()
 
@@ -306,47 +302,12 @@ class BaseProvider(ABC):
         all_lines = []
         
         if use_ocr:
-            # Use OCR extraction
-            logger.info(f"Using OCR extraction for {self.name} invoice.")
-            try:
-                # Process pages in batches of 3 to balance speed and memory consumption
-                # This reduces memory usage significantly compared to loading all pages at once
-                # while maintaining faster processing than one page at a time
-                
-                # Get total page count first
-                with pdfplumber.open(pdf_path) as pdf:
-                    logger.info(f"Total pages: {len(pdf.pages)}")
-                    total_pages = len(pdf.pages)
-                
-                batch_size = Config.OCR_BATCH_SIZE
-                logger.info(f"Processing pages in batches of {batch_size}")
-                for batch_start in range(1, total_pages + 1, batch_size):
-                    batch_end = min(batch_start + batch_size - 1, total_pages)
-                    logger.info(f"Processing batch number {batch_start} to {batch_end}")
-                    # Convert this batch of pages to images
-                    images = convert_from_path(
-                        pdf_path, 
-                        dpi=Config.OCR_DPI,
-                        first_page=batch_start,
-                        last_page=batch_end,
-                        thread_count=1
-                    )
-                    
-                    for image in images:
-                        ocr_text = pytesseract.image_to_string(
-                            image, 
-                            config='--psm 6'
-                        )
-                        if ocr_text:
-                            page_lines = [line.strip() for line in ocr_text.split('\n') if line.strip()]
-                            all_lines.extend(page_lines)
-                    
-                    del images
-                    gc.collect()
-                        
-            except Exception as e:
-                logger.error(f"Error during OCR extraction: {str(e)}", exc_info=True)
-                raise ValueError(f"OCR extraction failed: {str(e)}")
+            # Use Google Cloud Document AI OCR for better accuracy and no memory issues
+            logger.info(f"Using Document AI OCR extraction for {self.name} invoice.")
+            from src.services.document_ai_ocr import DocumentAIOCRService
+            ocr_service = DocumentAIOCRService()
+            all_lines = ocr_service.extract_text_lines(pdf_path)
+            logger.info(f"Document AI OCR extracted {len(all_lines)} lines successfully")
         else:
             # Use normal text extraction
             with pdfplumber.open(pdf_path) as pdf:
