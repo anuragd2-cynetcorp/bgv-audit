@@ -1,0 +1,73 @@
+name: Deploy to GCP
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      REGION: ${{ secrets.REGION }}
+      IMAGE_WEB: gcr.io/${{ secrets.GCP_PROJECT_ID }}/bgv-audit-web:latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Configure Docker for GCP
+        run: |
+          gcloud auth configure-docker --quiet
+
+      # Build & push web image
+      - name: Build & push web image
+        run: |
+          docker build --file Dockerfile.prod \
+            --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
+            --build-arg GIT_COMMIT=$(git rev-parse --short HEAD) \
+            -t $IMAGE_WEB .
+          docker push $IMAGE_WEB
+
+      # Deploy web to Cloud Run
+      - name: Deploy Web to Cloud Run
+        run: |
+          gcloud run deploy bgv-audit-web \
+            --image $IMAGE_WEB \
+            --region $REGION \
+            --platform managed \
+            --allow-unauthenticated \
+            --min-instances=1 \
+            --max-instances=5 \
+            --set-secrets "FIREBASE_AUTH_JSON=firebase-auth:latest"
+
+      # Force Traffic to Latest Revision
+      - name: Update Traffic to Latest
+        run: |
+          echo "Routing 100% traffic to the latest revision..."
+          gcloud run services update-traffic bgv-audit-web --region $REGION --to-latest
+
+      # Cleanup Old Revisions (Keep only latest 3)
+      - name: Cleanup Old Revisions
+        run: |
+          cleanup_service() {
+            SERVICE_NAME=$1
+            echo "Cleaning up old revisions for $SERVICE_NAME..."
+            gcloud run revisions list \
+              --service $SERVICE_NAME \
+              --region $REGION \
+              --format="value(name)" \
+              --sort-by="~metadata.creationTimestamp" \
+              | tail -n +4 \
+              | xargs -r -I {} gcloud run revisions delete {} --region $REGION --quiet || true
+            echo "Cleanup complete for $SERVICE_NAME."
+          }
+          cleanup_service "bgv-audit-web"
+
