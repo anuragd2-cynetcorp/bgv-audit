@@ -1,4 +1,5 @@
 flask
+flask-cors
 fireo
 google-cloud-firestore
 authlib
@@ -11,4 +12,5 @@ PyPDF2
 pytesseract
 Pillow
 pdf2image
+
 

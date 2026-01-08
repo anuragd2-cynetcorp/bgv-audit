@@ -1,6 +1,7 @@
 import os
 import traceback
 from flask import Flask, jsonify, render_template, request
+from flask_cors import CORS
 from werkzeug.middleware.proxy_fix import ProxyFix
 from src.config import Config
 from src.extensions import oauth
@@ -9,6 +10,9 @@ from src.logger import get_logger
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
+
+    # Enable CORS for all routes
+    CORS(app, resources={r"/*": {"origins": "*"}})
 
     # Initialize logger singleton
     logger = get_logger()
