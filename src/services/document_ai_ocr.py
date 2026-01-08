@@ -24,28 +24,24 @@ class DocumentAIOCRService:
         self.location = Config.DOCUMENT_AI_LOCATION
         self.processor_id = Config.DOCUMENT_AI_PROCESSOR_ID
         
-        # Initialize the client
-        self.client = documentai.DocumentProcessorServiceClient(
-            client_options=ClientOptions(
-                api_endpoint=f"{self.location}-documentai.googleapis.com"
-            )
-        )
+        # Initialize the client with proper endpoint (matching rules-actions-django pattern)
+        opts = ClientOptions(api_endpoint=f"{self.location}-documentai.googleapis.com")
+        self.client = documentai.DocumentProcessorServiceClient(client_options=opts)
         
-        # Get processor name (use default OCR processor if not specified)
-        if self.processor_id:
-            self.processor_name = self.client.processor_path(
-                self.project_id, self.location, self.processor_id
+        # Get processor name (required - matching rules-actions-django pattern)
+        if not self.processor_id:
+            raise ValueError(
+                "DOCUMENT_AI_PROCESSOR_ID is required. "
+                "Please set DOCUMENT_AI_PROCESSOR_ID environment variable. "
+                "You can create an OCR processor at: "
+                "https://console.cloud.google.com/ai/document-ai/processors"
             )
-        else:
-            # Use the default OCR processor
-            # Format: projects/{project}/locations/{location}/processors/{processor_id}
-            # We'll need to find or create the default OCR processor
-            # For now, we'll use the processor_path method which requires processor_id
-            # If processor_id is not set, we'll need to list processors or use a known default
-            logger.warning("DOCUMENT_AI_PROCESSOR_ID not set. Attempting to use default OCR processor.")
-            # Try to use a default processor name pattern
-            # In practice, you may need to create an OCR processor first
-            self.processor_name = None
+        
+        # Build processor path (matching rules-actions-django pattern)
+        self.processor_name = self.client.processor_path(
+            self.project_id, self.location, self.processor_id
+        )
+        logger.info(f"Document AI initialized: project={self.project_id}, location={self.location}, processor={self.processor_id}")
     
     def _get_project_id(self) -> str:
         """
@@ -91,71 +87,6 @@ class DocumentAIOCRService:
             "Could not determine GCP project ID. Set DOCUMENT_AI_PROJECT_ID environment variable."
         )
     
-    def _get_or_create_ocr_processor(self) -> str:
-        """
-        Get or create an OCR processor for the project.
-        
-        Returns:
-            Processor name (full resource path)
-        """
-        if self.processor_name:
-            return self.processor_name
-        
-        # List existing processors to find an OCR processor
-        parent = f"projects/{self.project_id}/locations/{self.location}"
-        try:
-            processors = self.client.list_processors(parent=parent)
-            for processor in processors:
-                if processor.type_ == "OCR_PROCESSOR":
-                    self.processor_name = processor.name
-                    logger.info(f"Found existing OCR processor: {processor.name}")
-                    return self.processor_name
-        except Exception as e:
-            logger.warning(f"Could not list processors: {e}")
-            # Try to create a processor if listing fails
-            try:
-                return self._create_ocr_processor()
-            except Exception as create_error:
-                logger.error(f"Could not create OCR processor: {create_error}")
-        
-        # If no processor found, try to create one
-        try:
-            return self._create_ocr_processor()
-        except Exception as e:
-            logger.error(f"Could not create OCR processor: {e}")
-            raise ValueError(
-                f"No OCR processor found in project {self.project_id}, location {self.location}. "
-                "Please create an OCR processor in the Document AI console at "
-                "https://console.cloud.google.com/ai/document-ai/processors "
-                "or set DOCUMENT_AI_PROCESSOR_ID environment variable to an existing processor ID."
-            )
-    
-    def _create_ocr_processor(self) -> str:
-        """
-        Create a new OCR processor for the project.
-        
-        Returns:
-            Processor name (full resource path)
-        """
-        parent = f"projects/{self.project_id}/locations/{self.location}"
-        
-        processor = documentai.Processor(
-            type_="OCR_PROCESSOR",
-            display_name="BGV Audit OCR Processor"
-        )
-        
-        try:
-            created_processor = self.client.create_processor(
-                parent=parent,
-                processor=processor
-            )
-            self.processor_name = created_processor.name
-            logger.info(f"Created new OCR processor: {self.processor_name}")
-            return self.processor_name
-        except Exception as e:
-            # If creation fails (e.g., processor already exists), try listing again
-            logger.warning(f"Could not create processor, may already exist: {e}")
-            raise
     
     def extract_text_lines(self, pdf_path: str) -> List[str]:
         """
@@ -175,22 +106,20 @@ class DocumentAIOCRService:
             raise FileNotFoundError(f"PDF file not found: {pdf_path}")
         
         try:
-            # Get or create processor
-            processor_name = self._get_or_create_ocr_processor()
-            
             # Read the PDF file
             with open(pdf_path, "rb") as pdf_file:
                 pdf_content = pdf_file.read()
             
             logger.info(f"Processing PDF with Document AI OCR: {pdf_path} ({len(pdf_content)} bytes)")
             
-            # Configure the process request
+            # Configure the process request (matching rules-actions-django pattern)
             request = documentai.ProcessRequest(
-                name=processor_name,
+                name=self.processor_name,
                 raw_document=documentai.RawDocument(
                     content=pdf_content,
                     mime_type="application/pdf"
                 ),
+                skip_human_review=True  # Matching rules-actions-django pattern
             )
             
             # Process the document
